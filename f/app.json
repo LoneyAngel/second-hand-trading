@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "闲物社",
+    "slug": "angel",
+    "version": "1.0.0",
+    "scheme": "tradingapp",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#DBEAFE"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "需要访问相机来拍摄商品照片",
+        "NSPhotoLibraryUsageDescription": "需要访问相册来选择商品照片"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#BFDBFE",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.angel1231111steam.angel"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#DBEAFE"
+        }
+      ],
+      "expo-image-picker",
+      "expo-font",
+      "@react-native-community/datetimepicker"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "26ffa31c-fa96-4035-aaa3-0eab93ab6272"
+      }
+    },
+    "owner": "angel1231111s-team"
+  }
+}

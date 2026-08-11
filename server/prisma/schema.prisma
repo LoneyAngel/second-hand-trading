@@ -1,0 +1,236 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["trading"]
+}
+
+// 用户表
+model User {
+  id        String   @id @default(uuid())
+  phone     String   @unique
+  nickname  String?
+  avatar    String?
+  password  String   // 密码哈希
+  pushToken String?  // Expo Push Token
+  products  Product[]
+  favorites Favorite[]
+  rentalRecordsAsOwner RentalRecord[] @relation("renterOwner")
+  rentalRecordsAsRenter RentalRecord[] @relation("renterUser")
+  refreshTokens RefreshToken[]
+  footprint UserFootprint?
+  followers Follow[] @relation("Followers")
+  following Follow[] @relation("Following")
+  addresses Address[]
+  roles     UserRole[]
+  reviews   Review[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@schema("trading")
+}
+
+// 角色表
+model Role {
+  id          String     @id @default(uuid())
+  name        String     @unique // USER | ADMIN | SUPER_ADMIN
+  description String?
+  users       UserRole[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  @@schema("trading")
+}
+
+// 用户-角色关联表（多对多）
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@schema("trading")
+}
+
+// 分类表
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  icon      String?
+  sort      Int       @default(0)
+  products  Product[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@schema("trading")
+}
+
+// 商品表
+model Product {
+  id          String         @id @default(uuid())
+  title       String
+  description String?
+  price       Decimal        @db.Decimal(10, 2)
+  deposit     Decimal        @db.Decimal(10, 2)
+  images      String[]
+  status      ProductStatus  @default(available)
+  priceUnit   PriceUnit      @default(day)
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId  String
+  category    Category       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  rentalRecords RentalRecord[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  favorites Favorite[]
+  reviews     Review[]
+  @@schema("trading")
+}
+
+// 租借记录表
+model RentalRecord {
+  id          String       @id @default(uuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  renterId    String
+  renter      User         @relation("renterUser", fields: [renterId], references: [id], onDelete: Cascade)
+  ownerId     String
+  owner       User         @relation("renterOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  startDate   DateTime
+  endDate     DateTime
+  totalAmount Decimal      @db.Decimal(10, 2)
+  deposit     Decimal      @db.Decimal(10, 2)
+  status      RentalStatus @default(pending)
+  review      Review?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  @@schema("trading")
+}
+
+// 评论表
+model Review {
+  id         String        @id @default(uuid())
+  productId  String
+  product    Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rentalId   String?       @unique
+  rental     RentalRecord? @relation(fields: [rentalId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  rating     Int           // 1-5
+  content    String?
+  images     String[]      @default([])
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([productId])
+  @@index([userId])
+  @@schema("trading")
+}
+
+// Refresh Token 表
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@schema("trading")
+}
+
+model Favorite {
+  id        String   @id @default(uuid())
+  userId    String
+  productId String
+  createdAt DateTime @default(now())
+
+  // 建立外键关系
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  // 🔒 联合唯一索引：防止同一个用户对同一个商品收藏多次
+  @@unique([userId, productId])
+  @@schema("trading")
+}
+
+// 用户浏览足迹
+model UserFootprint {
+  userId    String   @id
+  tracks    Json     @default("[]")
+  updatedAt DateTime @default(now()) @updatedAt
+
+  // 关联用户
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@schema("trading")
+}
+
+// 关注关系表
+model Follow {
+  id String @id @default(uuid())
+  followerId String
+  followingId String
+  createdAt DateTime @default(now())
+
+  // 关联关系
+  follower User @relation("Followers", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  // 联合唯一索引：防止重复关注
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@schema("trading")
+}
+
+// 用户地址表
+model Address {
+  id            String   @id @default(uuid())
+  consignee     String   // 收货人姓名
+  mobile        String   // 收货人手机号
+  detailAddress String   // 详细地址
+  isDefault     Boolean  @default(false) // 是否为默认地址
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // 建立与 User 表的外键关联
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 索引优化：高频通过 userId 查询地址列表
+  @@index([userId])
+  @@schema("trading")
+}
+
+// 商品状态枚举
+enum ProductStatus {
+  available
+  rented
+  maintenance
+  delist
+  @@schema("trading")
+}
+
+// 价格单位枚举
+enum PriceUnit {
+  day
+  hour
+  once
+  @@schema("trading")
+}
+
+// 租借记录状态枚举
+enum RentalStatus {
+  pending
+  ongoing
+  completed
+  cancelled
+  disputed
+  @@schema("trading")
+}
