@@ -27,7 +27,7 @@ interface RetryConfig extends InternalAxiosRequestConfig {
 
 class Request {
   private instance: AxiosInstance;
-  private baseURL = 'https://workout-proposal-share-debian.trycloudflare.com/api';
+  private baseURL = 'https://closes-anytime-wages-personally.trycloudflare.com/api';
 
   private timeout = 10000;
   private isRefreshing = false; // 锁：是否正在刷新 Token
