@@ -7,11 +7,9 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  TextInput,
-  ScrollView,
   RefreshControl,
+  Pressable,
 } from 'react-native';
-import Modal from '~/components/Modal';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AntDesign from '@expo/vector-icons/AntDesign';
@@ -19,21 +17,10 @@ import Feather from '@expo/vector-icons/Feather';
 import { theme } from '../theme';
 import { useQuery } from '../src/hooks/useQuery';
 import { addressService } from '../src/services';
-import type { Address, CreateAddressData, UpdateAddressData } from '../src/types';
-
-type EditorMode = 'add' | 'edit';
+import type { Address } from '../src/types';
 
 export default function AddressesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showEditor, setShowEditor] = useState(false);
-  const [editorMode, setEditorMode] = useState<EditorMode>('add');
-  const [editingAddress, setEditingAddress] = useState<Address | null>(null);
-  const [formData, setFormData] = useState<CreateAddressData>({
-    consignee: '',
-    mobile: '',
-    detailAddress: '',
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const {
     data: addressList,
@@ -47,63 +34,6 @@ export default function AddressesPage() {
       await refetch();
     } finally {
       setIsRefreshing(false);
-    }
-  };
-
-  const openAddEditor = () => {
-    setEditorMode('add');
-    setEditingAddress(null);
-    setFormData({ consignee: '', mobile: '', detailAddress: '' });
-    setShowEditor(true);
-  };
-
-  const openEditEditor = (addr: Address) => {
-    setEditorMode('edit');
-    setEditingAddress(addr);
-    setFormData({
-      consignee: addr.consignee,
-      mobile: addr.mobile,
-      detailAddress: addr.detailAddress,
-    });
-    setShowEditor(true);
-  };
-
-  const validateForm = (): boolean => {
-    if (!formData.consignee.trim()) {
-      Alert.alert('提示', '请输入收货人姓名');
-      return false;
-    }
-    if (!formData.mobile.trim()) {
-      Alert.alert('提示', '请输入手机号');
-      return false;
-    }
-    if (!/^1\d{10}$/.test(formData.mobile)) {
-      Alert.alert('提示', '请输入正确的 11 位手机号');
-      return false;
-    }
-    if (!formData.detailAddress.trim()) {
-      Alert.alert('提示', '请输入详细地址');
-      return false;
-    }
-    return true;
-  };
-
-  const handleSubmit = async () => {
-    if (!validateForm()) return;
-    setIsSubmitting(true);
-    try {
-      if (editorMode === 'add') {
-        await addressService.createAddress(formData);
-      } else if (editingAddress) {
-        await addressService.updateAddress(editingAddress.id, formData as UpdateAddressData);
-      }
-      await refetch();
-      setShowEditor(false);
-    } catch (error: any) {
-      const msg = error.response?.data?.message || '保存失败，请稍后重试';
-      Alert.alert('失败', msg);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -151,7 +81,7 @@ export default function AddressesPage() {
         </View>
         <TouchableOpacity
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          onPress={() => openEditEditor(item)}
+          onPress={() => router.push(`/address-edit?id=${item.id}`)}
         >
           <Feather name='edit-2' size={18} color={theme.colors.text_secondary} />
         </TouchableOpacity>
@@ -162,20 +92,19 @@ export default function AddressesPage() {
       </Text>
 
       <View style={styles.cardFooter}>
-        <TouchableOpacity style={styles.setDefaultBtn} onPress={() => handleSetDefault(item)}>
-          <AntDesign
-            name={item.isDefault ? 'checkcircle' : 'checkcircleo'}
-            size={16}
-            color={item.isDefault ? theme.colors.selected : theme.colors.text_secondary}
-          />
-          <Text style={[styles.setDefaultText, item.isDefault && { color: theme.colors.selected }]}>
-            设为默认
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(item)}>
+        {!item.isDefault && (
+          <Pressable>
+            <Text
+              style={[styles.setDefaultText, item.isDefault && { color: theme.colors.selected }]}
+            >
+              设为默认
+            </Text>
+          </Pressable>
+        )}
+        <Pressable style={styles.deleteBtn} onPress={() => handleDelete(item)}>
           <AntDesign name='delete' size={16} color='#EF4444' />
           <Text style={styles.deleteText}>删除</Text>
-        </TouchableOpacity>
+        </Pressable>
       </View>
     </View>
   );
@@ -222,68 +151,11 @@ export default function AddressesPage() {
 
       {/* 底部添加按钮 */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.addButton} onPress={openAddEditor}>
+        <TouchableOpacity style={styles.addButton} onPress={() => router.push('/address-edit')}>
           <AntDesign name='plus' size={20} color='white' />
           <Text style={styles.addButtonText}>新增地址</Text>
         </TouchableOpacity>
       </View>
-
-      {/* 编辑/新增弹窗 */}
-      <Modal visible={showEditor} onPress={() => setShowEditor(false)}>
-        <View style={styles.modalContent}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowEditor(false)}>
-              <AntDesign name='close' size={22} color={theme.colors.text_default} />
-            </TouchableOpacity>
-            <Text style={styles.modalTitle}>{editorMode === 'add' ? '新增地址' : '编辑地址'}</Text>
-            <TouchableOpacity onPress={handleSubmit} disabled={isSubmitting}>
-              {isSubmitting ? (
-                <ActivityIndicator size='small' color={theme.colors.selected} />
-              ) : (
-                <Text style={styles.saveText}>保存</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView keyboardShouldPersistTaps='handled'>
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>收货人</Text>
-              <TextInput
-                style={styles.input}
-                placeholder='请输入收货人姓名'
-                value={formData.consignee}
-                onChangeText={(text) => setFormData((prev) => ({ ...prev, consignee: text }))}
-                maxLength={20}
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>手机号</Text>
-              <TextInput
-                style={styles.input}
-                placeholder='请输入 11 位手机号'
-                value={formData.mobile}
-                onChangeText={(text) => setFormData((prev) => ({ ...prev, mobile: text }))}
-                keyboardType='phone-pad'
-                maxLength={11}
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.label}>详细地址</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder='请输入详细地址（楼栋、门牌号等）'
-                value={formData.detailAddress}
-                onChangeText={(text) => setFormData((prev) => ({ ...prev, detailAddress: text }))}
-                multiline
-                textAlignVertical='top'
-                maxLength={200}
-              />
-            </View>
-          </ScrollView>
-        </View>
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -430,55 +302,5 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: theme.fontSizes.md,
     fontWeight: '600',
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    paddingHorizontal: 20,
-    paddingBottom: 30,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  modalTitle: {
-    fontSize: theme.fontSizes.lg,
-    fontWeight: '600',
-    color: theme.colors.text_default,
-  },
-  saveText: {
-    fontSize: theme.fontSizes.md,
-    fontWeight: '600',
-    color: theme.colors.selected,
-  },
-  formGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: theme.fontSizes.md,
-    fontWeight: '500',
-    color: theme.colors.text_default,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: theme.radii.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: theme.fontSizes.md,
-    color: theme.colors.text_default,
-    backgroundColor: '#FAFAFA',
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
   },
 });

@@ -27,7 +27,7 @@ interface RetryConfig extends InternalAxiosRequestConfig {
 
 class Request {
   private instance: AxiosInstance;
-  private baseURL = 'https://ebony-producing-plugins-elite.trycloudflare.com/api';
+  private baseURL = 'http://10.131.201.163:3001/api';
 
   private timeout = 10000;
   private isRefreshing = false; // 锁：是否正在刷新 Token

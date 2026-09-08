@@ -9,14 +9,14 @@ import {
   ActivityIndicator,
   Platform,
   FlatList,
-  TextInput,
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { theme } from '../theme';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { useQuery } from '../src/hooks/useQuery';
 import { addressService, productService, rentalService } from '../src/services';
 import { useAuth } from '../src/hooks/useAuth';
@@ -24,7 +24,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
 import Modal from '../src/components/Modal';
-import type { Address, CreateAddressData } from '../src/types';
+import type { Address } from '../src/types';
 
 export default function RentPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -52,44 +52,21 @@ export default function RentPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentPicker, setCurrentPicker] = useState<'start' | 'end' | null>(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newAddress, setNewAddress] = useState({
-    consignee: '',
-    mobile: user?.phone ? user?.phone : '',
-    detailAddress: '',
-  });
-  const [isAddingAddress, setIsAddingAddress] = useState(false);
 
-  const handleAddAddress = async () => {
-    if (!newAddress.consignee.trim()) {
-      Alert.alert('提示', '请输入收货人名字');
-      return;
-    }
-    if (!newAddress.mobile.trim()) {
-      Alert.alert('提示', '请输入手机号');
-      return;
-    }
-    if (!/^1\d{10}$/.test(newAddress.mobile.trim())) {
-      Alert.alert('提示', '请输入正确的11位手机号');
-      return;
-    }
-    if (!newAddress.detailAddress.trim()) {
-      Alert.alert('提示', '请输入详细地址');
-      return;
-    }
+  // 页面聚焦时刷新地址列表（从地址编辑页返回后自动更新）
+  useFocusEffect(
+    useCallback(() => {
+      if (id) {
+        refetchAddresses();
+        refetchDefaultAddress();
+      }
+    }, [id, refetchAddresses, refetchDefaultAddress]),
+  );
 
-    setIsAddingAddress(true);
-    try {
-      await addressService.createAddress(newAddress as CreateAddressData);
-      Alert.alert('成功', '地址添加成功');
-      setNewAddress({ consignee: '', mobile: '', detailAddress: '' });
-      setShowAddForm(false);
-      await Promise.all([refetchAddresses(), refetchDefaultAddress()]);
-    } catch (err) {
-      Alert.alert('错误', '添加地址失败');
-    } finally {
-      setIsAddingAddress(false);
-    }
+  // 跳转到添加地址页
+  const handleAddNewAddress = () => {
+    setShowAddressModal(false);
+    router.push('/address-edit');
   };
 
   const handleSelectAddress = async (addr: Address) => {
@@ -418,26 +395,12 @@ export default function RentPage() {
       </View>
 
       <AddressModal
-        visible={showAddressModal && !showAddForm}
+        visible={showAddressModal}
         addressList={addressList || []}
         selectedAddress={address || null}
         onSelect={handleSelectAddress}
         onClose={() => setShowAddressModal(false)}
-        onAddNew={() => setShowAddForm(true)}
-      />
-
-      <AddAddressModal
-        visible={showAddForm}
-        onClose={() => setShowAddForm(false)}
-        formData={newAddress}
-        onFormChange={(field, value) =>
-          setNewAddress((prev) => ({
-            ...prev,
-            [field]: value,
-          }))
-        }
-        onSubmit={handleAddAddress}
-        isLoading={isAddingAddress}
+        onAddNew={handleAddNewAddress}
       />
     </SafeAreaView>
   );
@@ -510,84 +473,6 @@ function AddressModal({
           </TouchableOpacity>
         </View>
       </View>
-    </Modal>
-  );
-}
-
-// 添加地址 Modal 组件
-function AddAddressModal({
-  visible,
-  onClose,
-  formData,
-  onFormChange,
-  onSubmit,
-  isLoading,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  formData: CreateAddressData;
-  onFormChange: (field: keyof CreateAddressData, value: string) => void;
-  onSubmit: () => void;
-  isLoading: boolean;
-}) {
-  return (
-    <Modal visible={visible} onPress={onClose}>
-      <View style={addressModalStyles.header}>
-        <Text style={addressModalStyles.title}>添加收货地址</Text>
-        <TouchableOpacity
-          onPress={onClose}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          style={{ position: 'absolute', right: 5, top: 5 }}
-        >
-          <AntDesign name='close' size={18} color={theme.colors.text_default} />
-        </TouchableOpacity>
-      </View>
-      <ScrollView style={addressModalStyles.formContainer}>
-        <View style={addressModalStyles.formGroup}>
-          <Text style={addressModalStyles.label}>收货人</Text>
-          <TextInput
-            style={addressModalStyles.input}
-            placeholder='请输入收货人名字'
-            value={formData.consignee}
-            onChangeText={(value) => onFormChange('consignee', value)}
-            editable={!isLoading}
-          />
-        </View>
-        <View style={addressModalStyles.formGroup}>
-          <Text style={addressModalStyles.label}>手机号</Text>
-          <TextInput
-            style={addressModalStyles.input}
-            placeholder='请输入手机号'
-            value={formData.mobile}
-            onChangeText={(value) => onFormChange('mobile', value.replace(/\D/g, '').slice(0, 11))}
-            keyboardType='phone-pad'
-            maxLength={11}
-            editable={!isLoading}
-          />
-        </View>
-        <View style={addressModalStyles.formGroup}>
-          <Text style={addressModalStyles.label}>详细地址</Text>
-          <TextInput
-            style={[addressModalStyles.input, { height: 80, textAlignVertical: 'top' }]}
-            placeholder='请输入详细地址'
-            value={formData.detailAddress}
-            onChangeText={(value) => onFormChange('detailAddress', value)}
-            multiline
-            editable={!isLoading}
-          />
-        </View>
-      </ScrollView>
-      <TouchableOpacity
-        style={[addressModalStyles.submitButton, isLoading && addressModalStyles.disabledButton]}
-        onPress={onSubmit}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <ActivityIndicator size='small' color='white' />
-        ) : (
-          <Text style={addressModalStyles.submitButtonText}>保存地址</Text>
-        )}
-      </TouchableOpacity>
     </Modal>
   );
 }
@@ -913,50 +798,6 @@ const addressModalStyles = StyleSheet.create({
     marginTop: 12,
   },
   addButtonText: {
-    color: 'white',
-    fontSize: theme.fontSizes.md,
-    fontWeight: '600',
-    lineHeight: theme.fontSizes.md + 4,
-  },
-  formContainer: {
-    maxHeight: 300,
-    paddingHorizontal: theme.spacing.md,
-  },
-  formGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: theme.fontSizes.md,
-    fontWeight: '600',
-    lineHeight: theme.fontSizes.md + 4,
-    color: theme.colors.text_default,
-    marginBottom: 8,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: theme.colors.bg_gray,
-    borderRadius: theme.radii.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: theme.fontSizes.md,
-    fontWeight: '400',
-    lineHeight: theme.fontSizes.md + 4,
-    color: theme.colors.text_default,
-  },
-  submitButton: {
-    backgroundColor: theme.colors.selected,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: theme.radii.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 12,
-  },
-  disabledButton: {
-    backgroundColor: '#CCCCCC',
-  },
-  submitButtonText: {
     color: 'white',
     fontSize: theme.fontSizes.md,
     fontWeight: '600',

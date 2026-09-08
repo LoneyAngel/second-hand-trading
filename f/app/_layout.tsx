@@ -161,6 +161,7 @@ function RootLayoutNav() {
             headerShown: false,
           }}
         />
+        <Stack.Screen name='address-edit' options={{ headerShown: false }} />
       </Stack>
     </SafeAreaProvider>
   );

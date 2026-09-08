@@ -49,12 +49,14 @@
       "expo-image-picker",
       "expo-font",
       "@react-native-community/datetimepicker",
-      "expo-gaode-map",
-      {
-        "androidKey": "30b9543a1b0360fb2bb3319bba6f198b",
-        "enableLocation": true,
-        "locationDescription": "需要访问您的位置以提供地图选点服务"
-      }
+      [
+        "expo-gaode-map",
+        {
+          "androidKey": "30b9543a1b0360fb2bb3319bba6f198b",
+          "enableLocation": true,
+          "locationDescription": "需要访问您的位置以提供地图选点服务"
+        }
+      ]
     ],
     "extra": {
       "router": {},

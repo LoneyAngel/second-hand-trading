@@ -4,15 +4,19 @@
     "strict": true,
     "jsx": "react-jsx",
     "paths": {
-      "~/*": ["./src/*"],
-      "@assets/*": ["./assets/*"],
-      "theme": ["./theme/index.ts"]
+      "~/*": [
+        "./src/*"
+      ],
+      "@assets/*": [
+        "./assets/*"
+      ],
+      "theme": [
+        "./theme/index.ts"
+      ]
     }
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "**/*.tsx"
   ]
 }
