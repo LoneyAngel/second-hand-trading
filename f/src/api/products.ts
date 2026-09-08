@@ -182,10 +182,7 @@ export const productsApi = {
   /**
    * 获取商品评论列表
    */
-  async getReviews(
-    productId: string,
-    params?: ReviewListParams,
-  ): Promise<ReviewListResponse> {
+  async getReviews(productId: string, params?: ReviewListParams): Promise<ReviewListResponse> {
     return request.get(`/products/${productId}/reviews`, { params });
   },
 };

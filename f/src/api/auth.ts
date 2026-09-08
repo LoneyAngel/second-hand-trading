@@ -50,11 +50,4 @@ export const authApi = {
   async updateUser(data: UpdateUserData): Promise<User> {
     return request.put('/users/profile', data);
   },
-
-  /**
-   * 更新推送 token
-   */
-  async updatePushToken(token: string) {
-    return request.post('/users/push-token', { token });
-  },
 };

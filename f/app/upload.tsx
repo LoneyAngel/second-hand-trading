@@ -35,8 +35,7 @@ const formatAmountInput = (value: string): string => {
   const firstDotIndex = cleaned.indexOf('.');
   if (firstDotIndex !== -1) {
     cleaned =
-      cleaned.slice(0, firstDotIndex + 1) +
-      cleaned.slice(firstDotIndex + 1).replace(/\./g, '');
+      cleaned.slice(0, firstDotIndex + 1) + cleaned.slice(firstDotIndex + 1).replace(/\./g, '');
   }
   // 去除前导零（但保留 0.xx 形式，以及输入过程中的单个 0）
   if (cleaned.length > 1 && cleaned.startsWith('0') && cleaned[1] !== '.') {
@@ -335,137 +334,139 @@ export default function UploadPage() {
             contentContainerStyle={{ paddingBottom: 40 }}
           >
             <View style={{ gap: 14, paddingVertical: 12 }}>
-          {/* 1. 图片上传区域 */}
-          <View style={styles.bgContainer}>
-            <Text style={styles.sectionTitle}>商品图片</Text>
-            <View style={styles.imageGrid}>
-              {/* 已上传的 OSS 图片 */}
-              {ossImages.map((uri, index) => (
-                <View key={`oss-${index}`} style={styles.imageItem}>
-                  <Image source={{ uri }} style={styles.imagePreview} />
-                  <TouchableOpacity
-                    style={styles.removeImageButton}
-                    onPress={() => removeOssImage(index)}
-                  >
-                    <AntDesign name='close' size={14} color='#fff' />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {/* 本地选中的图片 */}
-              {localImages.map((uri, index) => (
-                <View key={`local-${index}`} style={styles.imageItem}>
-                  <Image source={{ uri }} style={styles.imagePreview} />
-                  <TouchableOpacity
-                    style={styles.removeImageButton}
-                    onPress={() => removeLocalImage(index)}
-                  >
-                    <AntDesign name='close' size={14} color='#fff' />
-                  </TouchableOpacity>
-                </View>
-              ))}
-              {ossImages.length + localImages.length < 6 && (
-                <TouchableOpacity
-                  style={styles.imageUploadButton}
-                  onPress={showImagePickerOptions}
-                >
-                  <AntDesign name='plus' size={24} color={THEME_CYAN} />
-                  {ossImages.length + localImages.length === 0 && (
-                    <Text style={styles.imageUploadText}>优质图片更吸引人~</Text>
+              {/* 1. 图片上传区域 */}
+              <View style={styles.bgContainer}>
+                <Text style={styles.sectionTitle}>商品图片</Text>
+                <View style={styles.imageGrid}>
+                  {/* 已上传的 OSS 图片 */}
+                  {ossImages.map((uri, index) => (
+                    <View key={`oss-${index}`} style={styles.imageItem}>
+                      <Image source={{ uri }} style={styles.imagePreview} />
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={() => removeOssImage(index)}
+                      >
+                        <AntDesign name='close' size={14} color='#fff' />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {/* 本地选中的图片 */}
+                  {localImages.map((uri, index) => (
+                    <View key={`local-${index}`} style={styles.imageItem}>
+                      <Image source={{ uri }} style={styles.imagePreview} />
+                      <TouchableOpacity
+                        style={styles.removeImageButton}
+                        onPress={() => removeLocalImage(index)}
+                      >
+                        <AntDesign name='close' size={14} color='#fff' />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {ossImages.length + localImages.length < 6 && (
+                    <TouchableOpacity
+                      style={styles.imageUploadButton}
+                      onPress={showImagePickerOptions}
+                    >
+                      <AntDesign name='plus' size={24} color={THEME_CYAN} />
+                      {ossImages.length + localImages.length === 0 && (
+                        <Text style={styles.imageUploadText}>优质图片更吸引人~</Text>
+                      )}
+                    </TouchableOpacity>
                   )}
-                </TouchableOpacity>
-              )}
-            </View>
-          </View>
-
-          {/* 2. 基础文本信息区域 */}
-          <View style={styles.bgContainer}>
-            <View>
-              <Text style={styles.sectionTitle}>商品标题</Text>
-              <TextInput
-                style={styles.input}
-                placeholder='写个吸引人的标题吧...'
-                placeholderTextColor='#A3AED0'
-                value={title}
-                onChangeText={setTitle}
-              />
-            </View>
-
-            <View>
-              <Text style={styles.sectionTitle}>商品描述</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder='描述一下商品的成色、租用须知...'
-                placeholderTextColor='#A3AED0'
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={4}
-                textAlignVertical='top'
-              />
-            </View>
-          </View>
-
-          {/* 3. 金额输入区域 */}
-          <View style={styles.bgContainer}>
-            <View>
-              <Text style={styles.sectionTitle}>租金</Text>
-              <View style={styles.priceContainer}>
-                <Text style={styles.currencySymbol}>¥</Text>
-                <TextInput
-                  style={styles.priceInput}
-                  placeholder='0.00'
-                  placeholderTextColor='#A3AED0'
-                  value={price}
-                  onChangeText={(v) => setPrice(formatAmountInput(v))}
-                  keyboardType='decimal-pad'
-                />
-                <TouchableOpacity style={styles.priceUnitButton} onPress={showPriceUnitOptions}>
-                  <Text style={styles.priceUnitText}>
-                    {PRICE_UNITS.find((u) => u.value === priceUnit)?.label}
-                  </Text>
-                </TouchableOpacity>
+                </View>
               </View>
-            </View>
 
-            <View>
-              <Text style={styles.sectionTitle}>押金</Text>
-              <View style={styles.priceContainer}>
-                <Text style={styles.currencySymbol}>¥</Text>
-                <TextInput
-                  style={styles.priceInput}
-                  placeholder='建议为日租金的 2-3 倍'
-                  placeholderTextColor='#A3AED0'
-                  value={deposit}
-                  onChangeText={(v) => setDeposit(formatAmountInput(v))}
-                  keyboardType='decimal-pad'
-                />
+              {/* 2. 基础文本信息区域 */}
+              <View style={styles.bgContainer}>
+                <View>
+                  <Text style={styles.sectionTitle}>商品标题</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder='写个吸引人的标题吧...'
+                    placeholderTextColor='#A3AED0'
+                    value={title}
+                    onChangeText={setTitle}
+                  />
+                </View>
+
+                <View>
+                  <Text style={styles.sectionTitle}>商品描述</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder='描述一下商品的成色、租用须知...'
+                    placeholderTextColor='#A3AED0'
+                    value={description}
+                    onChangeText={setDescription}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical='top'
+                  />
+                </View>
               </View>
-            </View>
-          </View>
 
-          {/* 4. 分类选择区域 */}
-          <View style={styles.bgContainer}>
-            <Text style={styles.sectionTitle}>商品分类</Text>
-            <View style={styles.categoryGrid}>
-              {categories.map((category) => {
-                const isSelected = selectedCategory === category.id;
-                return (
-                  <TouchableOpacity
-                    key={category.id}
-                    style={[styles.categoryItem, isSelected && styles.categoryItemSelected]}
-                    onPress={() => setSelectedCategory(category.id)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.categoryText, isSelected && styles.categoryTextSelected]}>
-                      {category.name}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
+              {/* 3. 金额输入区域 */}
+              <View style={styles.bgContainer}>
+                <View>
+                  <Text style={styles.sectionTitle}>租金</Text>
+                  <View style={styles.priceContainer}>
+                    <Text style={styles.currencySymbol}>¥</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder='0.00'
+                      placeholderTextColor='#A3AED0'
+                      value={price}
+                      onChangeText={(v) => setPrice(formatAmountInput(v))}
+                      keyboardType='decimal-pad'
+                    />
+                    <TouchableOpacity style={styles.priceUnitButton} onPress={showPriceUnitOptions}>
+                      <Text style={styles.priceUnitText}>
+                        {PRICE_UNITS.find((u) => u.value === priceUnit)?.label}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
-          <View style={{ height: 30 }} />
+                <View>
+                  <Text style={styles.sectionTitle}>押金</Text>
+                  <View style={styles.priceContainer}>
+                    <Text style={styles.currencySymbol}>¥</Text>
+                    <TextInput
+                      style={styles.priceInput}
+                      placeholder='建议为日租金的 2-3 倍'
+                      placeholderTextColor='#A3AED0'
+                      value={deposit}
+                      onChangeText={(v) => setDeposit(formatAmountInput(v))}
+                      keyboardType='decimal-pad'
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* 4. 分类选择区域 */}
+              <View style={styles.bgContainer}>
+                <Text style={styles.sectionTitle}>商品分类</Text>
+                <View style={styles.categoryGrid}>
+                  {categories.map((category) => {
+                    const isSelected = selectedCategory === category.id;
+                    return (
+                      <TouchableOpacity
+                        key={category.id}
+                        style={[styles.categoryItem, isSelected && styles.categoryItemSelected]}
+                        onPress={() => setSelectedCategory(category.id)}
+                        activeOpacity={0.8}
+                      >
+                        <Text
+                          style={[styles.categoryText, isSelected && styles.categoryTextSelected]}
+                        >
+                          {category.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={{ height: 30 }} />
             </View>
           </ScrollView>
         </TouchableWithoutFeedback>

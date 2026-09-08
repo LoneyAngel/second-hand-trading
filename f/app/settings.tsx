@@ -9,7 +9,6 @@ import { theme } from 'theme';
 export default function SettingsPage() {
   const { logout } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
-  const [notifications, setNotifications] = useState(true);
   const [autoPlay, setAutoPlay] = useState(true);
 
   const handleLogout = async () => {
@@ -85,20 +84,6 @@ export default function SettingsPage() {
             <View style={styles.settingRight}>
               <Text style={styles.settingValue}>标准</Text>
               <AntDesign name='right' size={16} color={theme.colors.text_gray} />
-            </View>
-          </TouchableOpacity>
-          <View style={styles.divider} />
-          <TouchableOpacity style={styles.settingItem}>
-            <View style={styles.settingLeft}>
-              <Text style={styles.settingLabel}>消息通知</Text>
-            </View>
-            <View style={styles.settingRight}>
-              <Switch
-                value={notifications}
-                onValueChange={setNotifications}
-                trackColor={{ false: '#ddd', true: '#00a1d6' }}
-                thumbColor='#fff'
-              />
             </View>
           </TouchableOpacity>
           <View style={styles.divider} />

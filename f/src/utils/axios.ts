@@ -27,7 +27,7 @@ interface RetryConfig extends InternalAxiosRequestConfig {
 
 class Request {
   private instance: AxiosInstance;
-  private baseURL = 'https://cannon-read-rocks-vendor.trycloudflare.com/api';
+  private baseURL = 'https://ebony-producing-plugins-elite.trycloudflare.com/api';
 
   private timeout = 10000;
   private isRefreshing = false; // 锁：是否正在刷新 Token

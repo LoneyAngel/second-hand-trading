@@ -140,12 +140,7 @@ export default function ProductReviewsPage() {
             >
               <Text style={styles.ratingBarText}>{star}星</Text>
               <View style={styles.ratingBarBg}>
-                <View
-                  style={[
-                    styles.ratingBarFill,
-                    { width: `${percent}%` },
-                  ]}
-                />
+                <View style={[styles.ratingBarFill, { width: `${percent}%` }]} />
               </View>
               <Text style={styles.ratingBarCount}>{count}</Text>
             </TouchableOpacity>

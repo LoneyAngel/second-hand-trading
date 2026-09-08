@@ -5,24 +5,26 @@
     "version": "1.0.0",
     "scheme": "tradingapp",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/splash.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
+      "image": "./assets/splash2.png",
+      "resizeMode": "cover",
       "backgroundColor": "#DBEAFE"
     },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "需要访问相机来拍摄商品照片",
-        "NSPhotoLibraryUsageDescription": "需要访问相册来选择商品照片"
+        "NSPhotoLibraryUsageDescription": "需要访问相册来选择商品照片",
+        "NSLocationWhenInUseUsageDescription": "需要访问您的位置以提供地图选点和附近商品推荐服务",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "需要访问您的位置以提供地图选点和附近商品推荐服务"
       }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#BFDBFE",
-        "foregroundImage": "./assets/icon.png"
+        "foregroundImage": "./assets/splash.png"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -39,14 +41,20 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash.png",
-          "resizeMode": "contain",
+          "image": "./assets/splash2.png",
+          "resizeMode": "cover",
           "backgroundColor": "#DBEAFE"
         }
       ],
       "expo-image-picker",
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-gaode-map",
+      {
+        "androidKey": "30b9543a1b0360fb2bb3319bba6f198b",
+        "enableLocation": true,
+        "locationDescription": "需要访问您的位置以提供地图选点服务"
+      }
     ],
     "extra": {
       "router": {},

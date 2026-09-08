@@ -42,17 +42,17 @@ const STATUS_COLOR: Record<RentalStatus, string> = {
 
 export default function MyRentalsPage() {
   const { type } = useLocalSearchParams<{ type?: string }>();
-  const [activeTab, setActiveTab] = useState<TabKey>(
-    type === 'owner' ? 'owner' : 'renter',
-  );
+  const [activeTab, setActiveTab] = useState<TabKey>(type === 'owner' ? 'owner' : 'renter');
 
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { data: rentals, loading, refetch } = useQuery(
+  const {
+    data: rentals,
+    loading,
+    refetch,
+  } = useQuery(
     () =>
-      activeTab === 'renter'
-        ? rentalService.getRenterRentals()
-        : rentalService.getOwnerRentals(),
+      activeTab === 'renter' ? rentalService.getRenterRentals() : rentalService.getOwnerRentals(),
     {
       enabled: true,
     },
@@ -116,9 +116,7 @@ export default function MyRentalsPage() {
 
       <View style={styles.cardFooter}>
         <View style={styles.userInfo}>
-          <Text style={styles.userLabel}>
-            {activeTab === 'renter' ? '出租方' : '承租方'}：
-          </Text>
+          <Text style={styles.userLabel}>{activeTab === 'renter' ? '出租方' : '承租方'}：</Text>
           <Text style={styles.userName}>
             {activeTab === 'renter' ? item.owner?.nickname : item.renter?.nickname || '用户'}
           </Text>
@@ -151,12 +149,7 @@ export default function MyRentalsPage() {
             style={[styles.tabItem, activeTab === tab.key && styles.activeTab]}
             onPress={() => setActiveTab(tab.key)}
           >
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab.key && styles.activeTabText,
-              ]}
-            >
+            <Text style={[styles.tabText, activeTab === tab.key && styles.activeTabText]}>
               {tab.label}
             </Text>
           </TouchableOpacity>

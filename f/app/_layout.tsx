@@ -5,15 +5,24 @@ import { useEffect, useState } from 'react';
 import { View, ActivityIndicator, Alert } from 'react-native';
 import { PortalProvider } from '@gorhom/portal';
 import { useFonts } from 'expo-font';
-import { usePushNotifications } from '~/hooks/usePushNotifications';
 import request from '~/utils/axios';
+import SplashAd from './splashAd';
 
 function RootLayoutNav() {
   const { isLoading, isAuthenticated } = useAuth();
   const [healthChecked, setHealthChecked] = useState(false);
+  const [showAd, setShowAd] = useState(false);
 
-  // 推送通知注册
-  usePushNotifications();
+  // 补充开屏广告
+  if (showAd) {
+    return (
+      <SplashAd
+        onFinish={() => {
+          setShowAd(false);
+        }}
+      />
+    );
+  }
 
   // 加载字体
   const [fontsLoaded, fontError] = useFonts({

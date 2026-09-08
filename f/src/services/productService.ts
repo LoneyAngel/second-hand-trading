@@ -173,10 +173,7 @@ class ProductService {
   /**
    * 获取商品评论列表
    */
-  async getReviews(
-    productId: string,
-    params?: { rating?: number; page?: number; limit?: number },
-  ) {
+  async getReviews(productId: string, params?: { rating?: number; page?: number; limit?: number }) {
     return productsApi.getReviews(productId, params);
   }
 }

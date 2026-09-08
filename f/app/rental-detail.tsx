@@ -48,10 +48,12 @@ export default function RentalDetailPage() {
   const { user } = useAuth();
   const [updating, setUpdating] = useState(false);
 
-  const { data: rental, loading, error, refetch } = useQuery(
-    () => rentalService.getRental(id!),
-    { enabled: !!id },
-  );
+  const {
+    data: rental,
+    loading,
+    error,
+    refetch,
+  } = useQuery(() => rentalService.getRental(id!), { enabled: !!id });
 
   if (loading) {
     return (
@@ -293,9 +295,7 @@ export default function RentalDetailPage() {
             <Feather name='user' size={16} color={theme.colors.text_secondary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>出租方</Text>
-              <Text style={styles.infoValue}>
-                {rental.owner?.nickname || '用户'}
-              </Text>
+              <Text style={styles.infoValue}>{rental.owner?.nickname || '用户'}</Text>
             </View>
           </View>
           <View style={styles.divider} />
@@ -303,9 +303,7 @@ export default function RentalDetailPage() {
             <Feather name='user' size={16} color={theme.colors.text_secondary} />
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>承租方</Text>
-              <Text style={styles.infoValue}>
-                {rental.renter?.nickname || '用户'}
-              </Text>
+              <Text style={styles.infoValue}>{rental.renter?.nickname || '用户'}</Text>
             </View>
           </View>
         </View>

@@ -158,13 +158,6 @@ class AuthService {
     await this.saveUser(updatedUser);
     return updatedUser;
   }
-
-  /**
-   * 更新推送 token
-   */
-  async updatePushToken(token: string): Promise<void> {
-    await authApi.updatePushToken(token);
-  }
 }
 
 export const authService = new AuthService();
