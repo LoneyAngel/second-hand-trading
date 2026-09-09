@@ -9,6 +9,7 @@ import { usersRouter } from './routes/user';
 import { addressesRouter } from './routes/addresses';
 import { uploadRouter } from './routes/upload';
 import { adminRouter } from './routes/admin';
+import { messagesRouter } from './routes/messages';
 import { errorHandler } from './middleware/errorHandler';
 
 dotenv.config();
@@ -40,6 +41,7 @@ app.use('/api/rentals', rentalsRouter);
 app.use('/api/addresses', addressesRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/messages', messagesRouter);
 
 // 健康检查
 app.get('/api/health', (_req, res) => {

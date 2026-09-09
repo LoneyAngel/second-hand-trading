@@ -1,15 +1,52 @@
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Alert, Switch } from 'react-native';
+import {
+  StyleSheet,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  Alert,
+  Switch,
+  Modal,
+  TextInput,
+  Keyboard,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../src/hooks/useAuth';
 import { theme } from 'theme';
+import {
+  getDefaultGreeting,
+  setDefaultGreeting,
+  DEFAULT_GREETING,
+} from '../src/utils/defaultGreeting';
 
 export default function SettingsPage() {
   const { logout } = useAuth();
   const [darkMode, setDarkMode] = useState(false);
   const [autoPlay, setAutoPlay] = useState(true);
+  const [greeting, setGreeting] = useState(DEFAULT_GREETING);
+  const [greetingModalVisible, setGreetingModalVisible] = useState(false);
+  const [greetingInput, setGreetingInput] = useState('');
+
+  // 加载存储的打招呼语
+  useEffect(() => {
+    getDefaultGreeting().then(setGreeting);
+  }, []);
+
+  const openGreetingModal = () => {
+    setGreetingInput(greeting);
+    setGreetingModalVisible(true);
+  };
+
+  const saveGreeting = async () => {
+    const text = greetingInput.trim() || DEFAULT_GREETING;
+    await setDefaultGreeting(text);
+    setGreeting(text);
+    setGreetingModalVisible(false);
+    Keyboard.dismiss();
+  };
 
   const handleLogout = async () => {
     Alert.alert('提示', '确定要退出登录吗？', [
@@ -101,6 +138,18 @@ export default function SettingsPage() {
             </View>
           </TouchableOpacity>
           <View style={styles.divider} />
+          <TouchableOpacity style={styles.settingItem} onPress={openGreetingModal}>
+            <View style={styles.settingLeft}>
+              <Text style={styles.settingLabel}>默认打招呼语</Text>
+            </View>
+            <View style={styles.settingRight}>
+              <Text style={styles.settingValue} numberOfLines={1}>
+                {greeting}
+              </Text>
+              <AntDesign name='right' size={16} color={theme.colors.text_gray} />
+            </View>
+          </TouchableOpacity>
+          <View style={styles.divider} />
           <TouchableOpacity style={styles.settingItem}>
             <View style={styles.settingLeft}>
               <Text style={styles.settingLabel}>语言设置</Text>
@@ -177,6 +226,44 @@ export default function SettingsPage() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* 默认打招呼语编辑弹窗 */}
+      <Modal
+        visible={greetingModalVisible}
+        transparent
+        animationType='fade'
+        onRequestClose={() => setGreetingModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalMask}
+          activeOpacity={1}
+          onPress={() => setGreetingModalVisible(false)}
+        >
+          <TouchableOpacity style={styles.modalContent} activeOpacity={1}>
+            <Text style={styles.modalTitle}>设置默认打招呼语</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={greetingInput}
+              onChangeText={setGreetingInput}
+              placeholder='请输入打招呼语'
+              placeholderTextColor={theme.colors.text_gray}
+              maxLength={50}
+              autoFocus
+            />
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalBtn, styles.modalBtnCancel]}
+                onPress={() => setGreetingModalVisible(false)}
+              >
+                <Text style={styles.modalBtnCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnConfirm]} onPress={saveGreeting}>
+                <Text style={styles.modalBtnConfirmText}>确定</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -258,5 +345,61 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#ff6b6b',
     fontWeight: '500',
+  },
+  // Modal
+  modalMask: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    color: '#000',
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalBtnCancel: {
+    backgroundColor: '#f1f2f3',
+  },
+  modalBtnCancelText: {
+    fontSize: 15,
+    color: '#666',
+  },
+  modalBtnConfirm: {
+    backgroundColor: theme.colors.selected,
+  },
+  modalBtnConfirmText: {
+    fontSize: 15,
+    color: '#fff',
+    fontWeight: '600',
   },
 });

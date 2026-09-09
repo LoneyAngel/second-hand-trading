@@ -251,3 +251,66 @@ export interface UpdateAddressData extends Partial<CreateAddressData> {}
 export interface AddressListResponse {
   data: Address[];
 }
+
+// ==================== 消息/聊天相关类型 ====================
+
+/** 消息类型 */
+export type MessageType = 'text' | 'image' | 'system' | 'product';
+
+/** 消息状态 */
+export type MessageStatus = 'sending' | 'sent' | 'failed' | 'read';
+
+/** 单条消息 */
+export interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  receiverId: string;
+  type: MessageType;
+  content: string;
+  /** 图片消息的图片 URL，或商品消息的商品 ID */
+  extra?: string;
+  status: MessageStatus;
+  createdAt: string;
+}
+
+/** 会话（聊天列表项） */
+export interface Conversation {
+  id: string;
+  /** 对方用户信息 */
+  otherUser: User;
+  /** 关联的商品（可选，从商品详情发起的咨询会有） */
+  product?: {
+    id: string;
+    title: string;
+    image: string;
+    price: number;
+  };
+  /** 最后一条消息 */
+  lastMessage: string;
+  lastMessageTime: string;
+  /** 未读数 */
+  unreadCount: number;
+}
+
+/** 消息列表响应 */
+export interface MessageListResponse {
+  data: Message[];
+  total: number;
+  hasMore: boolean;
+}
+
+/** 会话列表响应 */
+export interface ConversationListResponse {
+  data: Conversation[];
+  total: number;
+}
+
+/** 发送消息参数 */
+export interface SendMessageData {
+  receiverId: string;
+  type: MessageType;
+  content: string;
+  extra?: string;
+  productId?: string;
+}

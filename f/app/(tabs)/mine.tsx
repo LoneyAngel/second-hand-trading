@@ -6,6 +6,8 @@ import {
   Pressable,
   ActivityIndicator,
   Image,
+  Linking,
+  Alert,
 } from 'react-native';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { theme } from '../../theme';
@@ -275,6 +277,22 @@ export default function Mine_Page() {
         <View style={{ paddingHorizontal: 5, paddingVertical: 10, gap: 20 }}>
           <Pressable style={styles.menuItem} onPress={() => router.push('/addresses')}>
             <Text style={styles.text}>地址管理</Text>
+            <Entypo name='chevron-small-right' size={20} color={theme.colors.text_secondary} />
+          </Pressable>
+
+          <Pressable
+            style={styles.menuItem}
+            onPress={async () => {
+              const url = 'mailto:2670696747@qq.com?subject=用户反馈';
+              const canOpen = await Linking.canOpenURL(url);
+              if (canOpen) {
+                Linking.openURL(url);
+              } else {
+                Alert.alert('提示', '未找到邮件应用，请手动发送邮件至 2670696747@qq.com');
+              }
+            }}
+          >
+            <Text style={styles.text}>意见反馈</Text>
             <Entypo name='chevron-small-right' size={20} color={theme.colors.text_secondary} />
           </Pressable>
 

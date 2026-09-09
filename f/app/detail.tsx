@@ -129,7 +129,22 @@ export default function Detail_Page() {
       Alert.alert('提示', '请先登录');
       return;
     }
-    Alert.alert('提示', '联系功能开发中');
+    if (isMe) {
+      Alert.alert('提示', '不能和自己聊天哦');
+      return;
+    }
+    router.push({
+      pathname: '/chat',
+      params: {
+        userId: product.user.id,
+        userName: product.user.nickname || '用户',
+        userAvatar: product.user.avatar || '',
+        productId: product.id,
+        productTitle: product.title,
+        productImage: product.images?.[0] || '',
+        productPrice: String(product.price),
+      },
+    });
   };
 
   if (loading) {

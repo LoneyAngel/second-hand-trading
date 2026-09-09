@@ -45,6 +45,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name='messages'
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name='chat-outline' size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name='mine'
         options={{
           tabBarIcon: ({ color, size }) => <Feather name='user' size={size} color={color} />,

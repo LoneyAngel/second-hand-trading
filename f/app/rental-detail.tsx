@@ -146,6 +146,9 @@ export default function RentalDetailPage() {
       case 'accept':
         handleUpdateStatus('ongoing', '确定接受该订单吗？');
         break;
+      case 'confirm':
+        handleUpdateStatus('ongoing', '确认开始租赁吗？');
+        break;
       case 'cancel':
         handleUpdateStatus('cancelled', '确定取消该订单吗？');
         break;
@@ -155,9 +158,23 @@ export default function RentalDetailPage() {
       case 'rent-again':
         router.push({ pathname: '/rent', params: { id: rental?.productId } });
         break;
-      case 'contact':
-        Alert.alert('提示', '联系功能开发中');
+      case 'contact': {
+        const otherUser = isOwner ? rental.renter : rental.owner;
+        if (!otherUser) return;
+        router.push({
+          pathname: '/chat',
+          params: {
+            userId: otherUser.id,
+            userName: otherUser.nickname || '用户',
+            userAvatar: otherUser.avatar || '',
+            productId: rental.productId,
+            productTitle: rental.product.title,
+            productImage: rental.product.images?.[0] || '',
+            productPrice: String(rental.product.price),
+          },
+        });
         break;
+      }
       default:
         Alert.alert('提示', '功能开发中，敬请期待');
     }
@@ -176,16 +193,14 @@ export default function RentalDetailPage() {
         buttons.push({ label: '拒绝订单', action: 'cancel', danger: true });
         buttons.push({ label: '接受订单', action: 'accept', primary: true });
       } else if (isRenter) {
-        // 承租方：取消订单
+        // 承租方：取消订单 + 确认订单
         buttons.push({ label: '取消订单', action: 'cancel', danger: true });
-        buttons.push({ label: '联系对方', action: 'contact' });
+        buttons.push({ label: '确认订单', action: 'confirm', primary: true });
       }
     } else if (status === 'ongoing') {
-      if (isOwner) {
-        buttons.push({ label: '完成订单', action: 'complete', primary: true });
-      } else {
-        buttons.push({ label: '联系对方', action: 'contact' });
-      }
+      // 双方都可以取消或完成订单
+      buttons.push({ label: '取消订单', action: 'cancel', danger: true });
+      buttons.push({ label: '完成订单', action: 'complete', primary: true });
     } else if (status === 'completed') {
       if (isRenter) {
         buttons.push({ label: '再次租赁', action: 'rent-again', primary: true });

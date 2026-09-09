@@ -214,7 +214,7 @@ async function main() {
         price: randomItem(template.prices),
         deposit: randomItem(template.deposits),
         images: [randomItem(images)],
-        status: randomItem(['available', 'available', 'available', 'rented']),
+        status: 'available',
         userId: user.id,
         categoryId: category.id,
       },

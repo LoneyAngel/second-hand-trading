@@ -18,8 +18,14 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useQuery } from '../src/hooks/useQuery';
-import { addressService, productService, rentalService } from '../src/services';
+import {
+  addressService,
+  productService,
+  rentalService,
+  messageService,
+} from '../src/services';
 import { useAuth } from '../src/hooks/useAuth';
+import { getDefaultGreeting } from '../src/utils/defaultGreeting';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
@@ -136,6 +142,18 @@ export default function RentPage() {
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       });
+      // 自动发送默认打招呼语
+      try {
+        const greeting = await getDefaultGreeting();
+        await messageService.sendMessage({
+          receiverId: product!.user.id,
+          type: 'text',
+          content: greeting,
+          productId: id!,
+        });
+      } catch (e) {
+        console.error('发送默认打招呼语失败:', e);
+      }
       Alert.alert('成功', '订单创建成功！', [{ text: '确定', onPress: () => router.back() }]);
     } catch (error: any) {
       const errorMsg = error.response?.data?.message || '创建订单失败，请稍后重试';

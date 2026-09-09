@@ -27,6 +27,8 @@ model User {
   addresses Address[]
   roles     UserRole[]
   reviews   Review[]
+  sentMessages     Message[] @relation("MessageSender")
+  receivedMessages Message[] @relation("MessageReceiver")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@schema("trading")
@@ -186,6 +188,24 @@ model Follow {
   @@unique([followerId, followingId])
   @@index([followerId])
   @@index([followingId])
+  @@schema("trading")
+}
+
+// 消息表
+model Message {
+  id         String   @id @default(uuid())
+  senderId   String
+  receiverId String
+  content    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([senderId, receiverId, createdAt])
   @@schema("trading")
 }
 
