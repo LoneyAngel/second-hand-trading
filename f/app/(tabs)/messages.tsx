@@ -25,10 +25,7 @@ export default function MessagesPage() {
     data: conversations,
     loading,
     refetch,
-  } = useQuery(
-    () => messageService.getConversations().then((res) => res.data),
-    { enabled: false }, // 手动控制，在 useFocusEffect 里触发
-  );
+  } = useQuery(() => messageService.getConversations().then((res) => res.data));
 
   // 页面聚焦时刷新
   useFocusEffect(

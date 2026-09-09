@@ -90,6 +90,7 @@ model Product {
   updatedAt   DateTime       @updatedAt
   favorites Favorite[]
   reviews     Review[]
+  messages    Message[]
   @@schema("trading")
 }
 
@@ -197,14 +198,19 @@ model Message {
   senderId   String
   receiverId String
   content    String
+  type       String   @default("text") // text | image | system | product
+  extra      String?  // 额外信息，如图片URL、商品ID等
+  productId  String?
   isRead     Boolean  @default(false)
   createdAt  DateTime @default(now())
 
-  sender   User @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver User @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender   User     @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver User     @relation("MessageReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([senderId])
   @@index([receiverId])
+  @@index([productId])
   @@index([senderId, receiverId, createdAt])
   @@schema("trading")
 }

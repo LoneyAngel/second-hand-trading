@@ -117,9 +117,7 @@ export default function ChatPage() {
     } catch (err) {
       console.error('发送失败:', err);
       // 标记失败
-      setMessages((prev) =>
-        prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m)),
-      );
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, status: 'failed' } : m)));
     } finally {
       setSending(false);
     }
@@ -202,7 +200,9 @@ export default function ChatPage() {
         >
           <AntDesign name='arrow-left' size={22} color='#000' />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{otherUserName}</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {otherUserName}
+        </Text>
         <View style={{ width: 22 }} />
       </View>
 
