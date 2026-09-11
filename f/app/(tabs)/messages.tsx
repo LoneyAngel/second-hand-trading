@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
   Image,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useFocusEffect } from 'expo-router';
@@ -17,9 +17,13 @@ import { theme } from '../../theme';
 import { useQuery } from '../../src/hooks/useQuery';
 import { messageService } from '../../src/services';
 import type { Conversation } from '../../src/types';
+import { getSocket } from '../../src/utils/socket';
+import type { Socket } from 'socket.io-client';
 
 export default function MessagesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+  const boundRef = useRef(false);
 
   const {
     data: conversations,
@@ -27,10 +31,38 @@ export default function MessagesPage() {
     refetch,
   } = useQuery(() => messageService.getConversations().then((res) => res.data));
 
-  // 页面聚焦时刷新
+  // 页面聚焦时刷新 + 连接 socket 监听会话更新
   useFocusEffect(
     useCallback(() => {
       refetch();
+
+      // 连接 socket 并监听会话更新
+      let cancelled = false;
+      (async () => {
+        try {
+          const socket = await getSocket();
+          if (cancelled) return;
+          socketRef.current = socket;
+          if (boundRef.current) return;
+          boundRef.current = true;
+
+          socket.on('conversations:update', (_list: Conversation[]) => {
+            // 收到更新后重新拉取，保证数据与 REST API 一致
+            refetch();
+          });
+        } catch (e) {
+          // 连接失败忽略，HTTP 兜底
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        const socket = socketRef.current;
+        if (socket && boundRef.current) {
+          socket.off('conversations:update');
+          boundRef.current = false;
+        }
+      };
     }, [refetch]),
   );
 
@@ -43,7 +75,10 @@ export default function MessagesPage() {
     }
   };
 
+  const pressLockRef = useRef(false);
   const handlePressConversation = (item: Conversation) => {
+    if (pressLockRef.current) return;
+    pressLockRef.current = true;
     router.push({
       pathname: '/chat',
       params: {
@@ -56,6 +91,9 @@ export default function MessagesPage() {
         productPrice: item.product?.price,
       },
     });
+    setTimeout(() => {
+      pressLockRef.current = false;
+    }, 800);
   };
 
   const formatTime = (timeStr: string) => {
@@ -74,7 +112,7 @@ export default function MessagesPage() {
   };
 
   const renderItem = ({ item }: { item: Conversation }) => (
-    <TouchableOpacity style={styles.item} onPress={() => handlePressConversation(item)}>
+    <Pressable style={styles.item} onPress={() => handlePressConversation(item)}>
       <View style={styles.avatarWrap}>
         {item.otherUser.avatar ? (
           <Image source={{ uri: item.otherUser.avatar }} style={styles.avatar} />
@@ -100,7 +138,7 @@ export default function MessagesPage() {
           {item.lastMessage || '暂无消息'}
         </Text>
       </View>
-    </TouchableOpacity>
+    </Pressable>
   );
 
   return (

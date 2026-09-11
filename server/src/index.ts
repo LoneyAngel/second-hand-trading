@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import http from 'http';
 import { authRouter } from './routes/auth';
 import { productsRouter } from './routes/products';
 import { categoriesRouter } from './routes/categories';
@@ -11,10 +12,12 @@ import { uploadRouter } from './routes/upload';
 import { adminRouter } from './routes/admin';
 import { messagesRouter } from './routes/messages';
 import { errorHandler } from './middleware/errorHandler';
+import { setupSocket } from './socket';
 
 dotenv.config();
 
 const app = express();
+const server = http.createServer(app);
 const PORT = Number(process.env.PORT) || 3001;
 
 // CORS 配置
@@ -51,6 +54,9 @@ app.get('/api/health', (_req, res) => {
 // 简单的错误处理
 app.use(errorHandler);
 
-app.listen(PORT, '0.0.0.0', () => {
+// 初始化 Socket.IO
+setupSocket(server);
+
+server.listen(PORT, '0.0.0.0', () => {
   console.error(`Server is running on port ${PORT}`);
 });

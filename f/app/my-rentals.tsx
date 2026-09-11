@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -68,6 +68,19 @@ export default function MyRentalsPage() {
     }
   };
 
+  const pressLockRef = useRef(false);
+  const goToRentalDetail = (id: string) => {
+    if (pressLockRef.current) return;
+    pressLockRef.current = true;
+    router.push({
+      pathname: '/rental-detail',
+      params: { id },
+    });
+    setTimeout(() => {
+      pressLockRef.current = false;
+    }, 800);
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
@@ -77,12 +90,7 @@ export default function MyRentalsPage() {
     <TouchableOpacity
       style={styles.rentalCard}
       activeOpacity={0.7}
-      onPress={() =>
-        router.push({
-          pathname: '/rental-detail',
-          params: { id: item.id },
-        })
-      }
+      onPress={() => goToRentalDetail(item.id)}
     >
       <View style={styles.cardHeader}>
         <Text style={[styles.statusText, { color: STATUS_COLOR[item.status] }]}>

@@ -107,8 +107,9 @@ model RentalRecord {
   endDate     DateTime
   totalAmount Decimal      @db.Decimal(10, 2)
   deposit     Decimal      @db.Decimal(10, 2)
-  status      RentalStatus @default(pending)
-  review      Review?
+  status              RentalStatus @default(pending)
+  completeRequestedBy String?       // 发起完成确认的用户ID，双方确认后才变completed
+  review              Review?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   @@schema("trading")

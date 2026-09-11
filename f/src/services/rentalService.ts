@@ -39,6 +39,13 @@ class RentalService {
   async updateRentalStatus(id: string, data: UpdateRentalStatusData): Promise<RentalRecord> {
     return rentalsApi.updateRentalStatus(id, data);
   }
+
+  /**
+   * 发起 / 确认 / 撤销 完成订单
+   */
+  async completeRental(id: string): Promise<RentalRecord> {
+    return rentalsApi.completeRental(id);
+  }
 }
 
 export const rentalService = new RentalService();

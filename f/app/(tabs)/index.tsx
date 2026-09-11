@@ -18,6 +18,7 @@ import { productService } from '../../src/services';
 import type { AdviseProductGroup, Product, PriceUnit } from '../../src/types';
 import Entypo from '@expo/vector-icons/Entypo';
 import { useState } from 'react';
+import { useDebouncedPress } from '../../src/hooks/useDebouncedPress';
 
 // 价格单位配置
 const PRICE_UNITS: { value: PriceUnit; label: string }[] = [
@@ -35,6 +36,10 @@ export default function Home_Page() {
     error,
     refetch,
   } = useQuery(() => productService.getAdviseProducts());
+
+  const goToUpload = useDebouncedPress(() => {
+    router.push('/upload');
+  });
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -82,9 +87,7 @@ export default function Home_Page() {
       {/* 上传商品引导 */}
       <TouchableOpacity
         style={styles.uploadGuide}
-        onPress={() => {
-          router.push('/upload');
-        }}
+        onPress={goToUpload}
       >
         <View style={styles.uploadIconContainer}>
           <Person height={32} width={32} fill={theme.colors.text_default} />

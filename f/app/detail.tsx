@@ -20,6 +20,7 @@ import { useAuth } from '../src/hooks';
 import { useEffect, useState } from 'react';
 import type { PriceUnit, Review } from '../src/types';
 import ReviewCard from '~/components/ReviewCard';
+import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
 
 // 价格单位配置
 const PRICE_UNITS: { value: PriceUnit; label: string }[] = [
@@ -82,6 +83,17 @@ export default function Detail_Page() {
     }
     footprint();
   }, [id]);
+
+  const goToUserProfile = useDebouncedPress(() => {
+    router.push({
+      pathname: '/public-personal',
+      params: { userId: product.user.id },
+    });
+  });
+
+  const goToReviews = useDebouncedPress(() => {
+    router.push({ pathname: '/product-reviews', params: { productId: id } });
+  });
 
   const handleRent = () => {
     if (!isAuthenticated) {
@@ -236,12 +248,7 @@ export default function Detail_Page() {
             <Text style={styles.sectionTitle}>出租人</Text>
             <TouchableOpacity
               style={styles.userInfo}
-              onPress={() => {
-                router.push({
-                  pathname: '/public-personal',
-                  params: { userId: product.user.id },
-                });
-              }}
+              onPress={goToUserProfile}
             >
               <View style={styles.userAvatar}>
                 {product.user.avatar ? (
@@ -299,9 +306,7 @@ export default function Detail_Page() {
               <TouchableOpacity
                 hitSlop={{ top: 5, bottom: 5, left: 5, right: 5 }}
                 style={{ flexDirection: 'row', gap: 5, alignItems: 'center' }}
-                onPress={() =>
-                  router.push({ pathname: '/product-reviews', params: { productId: id } })
-                }
+                onPress={goToReviews}
               >
                 <Text style={styles.description}>查看全部</Text>
                 <FontAwesome name='chevron-right' size={12} color={theme.colors.text_secondary} />

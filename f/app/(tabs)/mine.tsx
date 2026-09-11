@@ -18,17 +18,13 @@ import { useAuth } from '../../src/hooks/useAuth';
 import { useQuery } from '../../src/hooks/useQuery';
 import { authService, productService } from '../../src/services';
 import { router } from 'expo-router';
-import { ReactElement } from 'react';
-import Feather from '@expo/vector-icons/Feather';
+import { ReactElement, useCallback } from 'react';
+import { useDebouncedPress } from '../../src/hooks/useDebouncedPress';
 
 const ORDER_TABS: { label: string; icon: ReactElement }[] = [
   {
-    label: '我租到的',
+    label: '我的订单',
     icon: <MaterialCommunityIcons name='hand-coin-outline' size={24} />,
-  },
-  {
-    label: '我租出的',
-    icon: <MaterialCommunityIcons name='package-variant-closed-check' size={24} />,
   },
 ];
 
@@ -64,6 +60,31 @@ export default function Mine_Page() {
   });
   console.log('followingCount', followingCount);
 
+  // 防抖跳转
+  const goToLogin = useDebouncedPress(() => router.push({ pathname: '/login' }));
+  const goToEditProfile = useDebouncedPress(() => router.push('/edit-profile'));
+  const goToFootprints = useDebouncedPress(() => router.push('/footprints'));
+  const goToFavorites = useDebouncedPress(() => router.push({ pathname: '/my-favorites' }));
+  const goToFollowing = useDebouncedPress(() => router.push('/my-following'));
+  const goToMyProducts = useDebouncedPress(() => router.push('/my-products'));
+  const goToMyRentalsRenter = useDebouncedPress(() =>
+    router.push({ pathname: '/my-rentals', params: { type: 'renter' } }),
+  );
+  const goToMyRentalsOwner = useDebouncedPress(() =>
+    router.push({ pathname: '/my-rentals', params: { type: 'owner' } }),
+  );
+  const goToAddresses = useDebouncedPress(() => router.push('/addresses'));
+  const goToSettings = useDebouncedPress(() => router.push('/settings'));
+  const handleFeedback = useDebouncedPress(async () => {
+    const url = 'mailto:2670696747@qq.com?subject=用户反馈';
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      Linking.openURL(url);
+    } else {
+      Alert.alert('提示', '未找到邮件应用，请手动发送邮件至 2670696747@qq.com');
+    }
+  });
+
   if (userLoading) {
     return (
       <View style={styles.loadingContainer}>
@@ -80,12 +101,7 @@ export default function Mine_Page() {
           <Text style={styles.loginPromptText}>登录后查看更多内容</Text>
           <Pressable
             style={styles.loginButton}
-            onPress={() => {
-              // 这里可以跳转到登录页面，暂时只有注册/登录功能
-              router.push({
-                pathname: '/login',
-              });
-            }}
+            onPress={goToLogin}
           >
             <Text style={styles.loginButtonText}>登录 / 注册</Text>
           </Pressable>
@@ -119,7 +135,7 @@ export default function Mine_Page() {
               borderRadius: theme.radii.md,
               backgroundColor: 'white',
             }}
-            onPress={() => router.push('/edit-profile')}
+            onPress={goToEditProfile}
           >
             <View>
               {user?.avatar ? (
@@ -184,29 +200,21 @@ export default function Mine_Page() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-around', gap: 10 }}>
             <Pressable
               style={styles.iconTextButton}
-              onPress={() => {
-                router.push('/footprints');
-              }}
+              onPress={goToFootprints}
             >
               <Text style={styles.iconNumber}>{footprintsCount?.count ?? 0}</Text>
               <Text style={styles.iconText}>我的浏览</Text>
             </Pressable>
             <Pressable
               style={styles.iconTextButton}
-              onPress={() => {
-                router.push({
-                  pathname: '/my-favorites',
-                });
-              }}
+              onPress={goToFavorites}
             >
               <Text style={styles.iconNumber}>{favoriteCount?.data ? favoriteCount?.data : 0}</Text>
               <Text style={styles.iconText}>我的收藏</Text>
             </Pressable>
             <Pressable
               style={styles.iconTextButton}
-              onPress={() => {
-                router.push('/my-following');
-              }}
+              onPress={goToFollowing}
             >
               <Text style={styles.iconNumber}>{followingCount?.count ?? 0}</Text>
               <Text style={styles.iconText}>我的关注</Text>
@@ -225,37 +233,20 @@ export default function Mine_Page() {
           },
         ]}
       >
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <Text style={styles.title}>订单</Text>
-          <Entypo name='chevron-small-right' size={28} color={theme.colors.text_secondary} />
-        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.lg }}>
           <Pressable
             style={styles.textButton}
-            onPress={() => {
-              router.push('/my-products');
-            }}
+            onPress={goToMyProducts}
           >
             {/* <Feather name='shopping-bag' size={24} color={theme.colors.text_default} /> */}
             <MaterialCommunityIcons name='package-variant-closed-plus' size={24} />
-            <Text style={styles.tabLabel}>我发布的</Text>
+            <Text style={styles.tabLabel}>我的发布</Text>
           </Pressable>
           {ORDER_TABS.map((tab, index) => (
             <Pressable
               key={index}
               style={styles.textButton}
-              onPress={() => {
-                router.push({
-                  pathname: '/my-rentals',
-                  params: { type: index === 0 ? 'renter' : 'owner' },
-                });
-              }}
+              onPress={index === 0 ? goToMyRentalsRenter : goToMyRentalsOwner}
             >
               {tab.icon}
               <Text style={styles.tabLabel}>{tab.label}</Text>
@@ -275,28 +266,20 @@ export default function Mine_Page() {
         ]}
       >
         <View style={{ paddingHorizontal: 5, paddingVertical: 10, gap: 20 }}>
-          <Pressable style={styles.menuItem} onPress={() => router.push('/addresses')}>
+          <Pressable style={styles.menuItem} onPress={goToAddresses}>
             <Text style={styles.text}>地址管理</Text>
             <Entypo name='chevron-small-right' size={20} color={theme.colors.text_secondary} />
           </Pressable>
 
           <Pressable
             style={styles.menuItem}
-            onPress={async () => {
-              const url = 'mailto:2670696747@qq.com?subject=用户反馈';
-              const canOpen = await Linking.canOpenURL(url);
-              if (canOpen) {
-                Linking.openURL(url);
-              } else {
-                Alert.alert('提示', '未找到邮件应用，请手动发送邮件至 2670696747@qq.com');
-              }
-            }}
+            onPress={handleFeedback}
           >
             <Text style={styles.text}>意见反馈</Text>
             <Entypo name='chevron-small-right' size={20} color={theme.colors.text_secondary} />
           </Pressable>
 
-          <Pressable style={styles.menuItem} onPress={() => router.push('/settings')}>
+          <Pressable style={styles.menuItem} onPress={goToSettings}>
             <Text style={styles.text}>设置</Text>
             <Entypo name='chevron-small-right' size={20} color={theme.colors.text_secondary} />
           </Pressable>

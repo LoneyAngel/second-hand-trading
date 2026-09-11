@@ -208,6 +208,85 @@ rentalsRouter.put(
   }),
 );
 
+/**
+ * 发起 / 确认 完成订单
+ * POST /api/rentals/:id/complete
+ * - 若当前没有发起方：将 completeRequestedBy 设为当前用户，等待对方确认
+ * - 若发起方是对方（另一方点击确认）：将状态改为 completed
+ * - 若发起方是自己（重复点击 = 撤销请求）：将 completeRequestedBy 清空
+ */
+rentalsRouter.post(
+  '/:id/complete',
+  authMiddleware,
+  asyncHandler(async (req: AuthenticatedRequest, res) => {
+    const idParam = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const userId = req.user!.userId;
+
+    const rental = await prisma.rentalRecord.findUnique({
+      where: { id: idParam },
+    });
+
+    if (!rental) {
+      throw new ApiError(404, '租借记录不存在');
+    }
+
+    if (rental.renterId !== userId && rental.ownerId !== userId) {
+      throw new ApiError(403, '无权操作此记录');
+    }
+
+    if (rental.status !== 'ongoing') {
+      throw new ApiError(400, '当前状态不可操作');
+    }
+
+    let updatedRental;
+
+    if (!rental.completeRequestedBy) {
+      // 发起完成请求
+      updatedRental = await prisma.rentalRecord.update({
+        where: { id: idParam },
+        data: { completeRequestedBy: userId },
+        include: {
+          product: true,
+          renter: { select: { id: true, nickname: true, avatar: true } },
+          owner: { select: { id: true, nickname: true, avatar: true } },
+        },
+      });
+    } else if (rental.completeRequestedBy === userId) {
+      // 自己取消发起
+      updatedRental = await prisma.rentalRecord.update({
+        where: { id: idParam },
+        data: { completeRequestedBy: null },
+        include: {
+          product: true,
+          renter: { select: { id: true, nickname: true, avatar: true } },
+          owner: { select: { id: true, nickname: true, avatar: true } },
+        },
+      });
+    } else {
+      // 对方确认完成 → 状态改为 completed
+      updatedRental = await prisma.rentalRecord.update({
+        where: { id: idParam },
+        data: {
+          status: 'completed',
+          completeRequestedBy: null,
+        },
+        include: {
+          product: true,
+          renter: { select: { id: true, nickname: true, avatar: true } },
+          owner: { select: { id: true, nickname: true, avatar: true } },
+        },
+      });
+      // 更新商品状态为可租用
+      await prisma.product.update({
+        where: { id: rental.productId },
+        data: { status: 'available' },
+      });
+    }
+
+    res.json(updatedRental);
+  }),
+);
+
 // 获取租借记录详情
 rentalsRouter.get(
   '/:id',

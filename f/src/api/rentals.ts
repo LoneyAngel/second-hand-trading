@@ -36,4 +36,14 @@ export const rentalsApi = {
   async updateRentalStatus(id: string, data: UpdateRentalStatusData): Promise<RentalRecord> {
     return request.put(`/rentals/${id}/status`, data);
   },
+
+  /**
+   * 发起 / 确认 完成订单
+   * - 未发起过：发起完成请求
+   * - 自己是发起方：撤销请求
+   * - 对方是发起方：确认完成
+   */
+  async completeRental(id: string): Promise<RentalRecord> {
+    return request.post(`/rentals/${id}/complete`);
+  },
 };

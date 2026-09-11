@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { theme } from '../theme';
 import { useQuery } from '../src/hooks/useQuery';
 import { addressService } from '../src/services';
 import type { Address } from '../src/types';
+import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
 
 export default function AddressesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -67,6 +68,26 @@ export default function AddressesPage() {
     ]);
   };
 
+  // 跳转地址编辑页（参数化防抖）
+  const editLockRef = useRef(false);
+  const goToEditAddress = (id?: string) => {
+    if (editLockRef.current) return;
+    editLockRef.current = true;
+    if (id) {
+      router.push(`/address-edit?id=${id}`);
+    } else {
+      router.push('/address-edit');
+    }
+    setTimeout(() => {
+      editLockRef.current = false;
+    }, 800);
+  };
+
+  // 跳转新增地址
+  const goToAddAddress = useDebouncedPress(() => {
+    router.push('/address-edit');
+  });
+
   const renderItem = ({ item }: { item: Address }) => (
     <View style={styles.addressCard}>
       <View style={styles.cardHeader}>
@@ -81,7 +102,7 @@ export default function AddressesPage() {
         </View>
         <TouchableOpacity
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          onPress={() => router.push(`/address-edit?id=${item.id}`)}
+          onPress={() => goToEditAddress(item.id)}
         >
           <Feather name='edit-2' size={18} color={theme.colors.text_secondary} />
         </TouchableOpacity>
@@ -151,7 +172,7 @@ export default function AddressesPage() {
 
       {/* 底部添加按钮 */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.addButton} onPress={() => router.push('/address-edit')}>
+        <TouchableOpacity style={styles.addButton} onPress={goToAddAddress}>
           <AntDesign name='plus' size={20} color='white' />
           <Text style={styles.addButtonText}>新增地址</Text>
         </TouchableOpacity>

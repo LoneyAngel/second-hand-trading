@@ -15,6 +15,7 @@ import { productService } from '../src/services';
 import type { ProductStatus, Product } from '../src/types';
 import MyProductCard from '../src/components/MyProductCard';
 import Entypo from '@expo/vector-icons/Entypo';
+import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
 
 const FILTERS: { label: string; value: ProductStatus | 'all' }[] = [
   { label: '全部', value: 'all' },
@@ -50,6 +51,10 @@ export default function MyProductsPage() {
       });
     }
   }, [data?.data]);
+
+  const goToUpload = useDebouncedPress(() => {
+    router.push('/upload');
+  });
 
   const hasMore = data?.hasMore || false;
 
@@ -91,7 +96,7 @@ export default function MyProductsPage() {
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyText}>暂无商品</Text>
-        <TouchableOpacity style={styles.publishButton} onPress={() => router.push('/upload')}>
+        <TouchableOpacity style={styles.publishButton} onPress={goToUpload}>
           <Text style={styles.publishButtonText}>发布商品</Text>
         </TouchableOpacity>
       </View>

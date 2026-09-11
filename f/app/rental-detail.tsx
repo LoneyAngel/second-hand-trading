@@ -6,7 +6,7 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -14,10 +14,12 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { theme } from '../theme';
 import { useQuery } from '../src/hooks/useQuery';
-import { rentalService } from '../src/services';
+import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
+import { rentalService, messageService } from '../src/services';
 import { useAuth } from '../src/hooks/useAuth';
 import { useState } from 'react';
 import type { RentalRecord, RentalStatus } from '../src/types';
+import { getSocket, sendSocketMessage } from '../src/utils/socket';
 
 const STATUS_TEXT: Record<RentalStatus, string> = {
   pending: '待确认',
@@ -47,6 +49,12 @@ export default function RentalDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const [updating, setUpdating] = useState(false);
+  // 自定义确认弹窗状态
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [confirmType, setConfirmType] = useState<'default' | 'danger' | 'primary'>('default');
+  const confirmActionRef = useState<(() => void) | null>(null);
 
   const {
     data: rental,
@@ -54,6 +62,12 @@ export default function RentalDetailPage() {
     error,
     refetch,
   } = useQuery(() => rentalService.getRental(id!), { enabled: !!id });
+  const goToProductDetail = useDebouncedPress(() => {
+    router.push({
+      pathname: '/detail',
+      params: { id: rental?.productId },
+    });
+  });
 
   if (loading) {
     return (
@@ -118,27 +132,110 @@ export default function RentalDetailPage() {
   const isOwner = user?.id === rental?.ownerId;
   const isRenter = user?.id === rental?.renterId;
 
-  const handleUpdateStatus = async (status: RentalStatus, confirmText?: string) => {
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    type: 'default' | 'danger' | 'primary' = 'primary',
+  ) => {
+    setConfirmTitle(title);
+    setConfirmMessage(message);
+    setConfirmType(type);
+    confirmActionRef[1](() => onConfirm);
+    setConfirmVisible(true);
+  };
+
+  const handleConfirm = () => {
+    setConfirmVisible(false);
+    setTimeout(() => {
+      confirmActionRef[0]?.();
+    }, 100);
+  };
+
+  const handleUpdateStatus = (status: RentalStatus, confirmText?: string) => {
+    const doUpdate = async () => {
+      setUpdating(true);
+      try {
+        await rentalService.updateRentalStatus(id!, { status });
+        refetch();
+      } catch (err: any) {
+        // 错误由 showConfirm 不捕获，这里兜底
+        console.error('操作失败:', err);
+      } finally {
+        setUpdating(false);
+      }
+    };
+
     if (confirmText) {
-      const confirmed = await new Promise<boolean>((resolve) => {
-        Alert.alert('确认操作', confirmText, [
-          { text: '取消', style: 'cancel', onPress: () => resolve(false) },
-          { text: '确定', style: 'default', onPress: () => resolve(true) },
-        ]);
-      });
-      if (!confirmed) return;
+      showConfirm('确认操作', confirmText, doUpdate, status === 'cancelled' ? 'danger' : 'primary');
+    } else {
+      doUpdate();
+    }
+  };
+
+  // 完成订单：发起确认 / 确认完成 / 撤销
+  const handleComplete = () => {
+    if (!rental) return;
+
+    const doComplete = async () => {
+      setUpdating(true);
+      try {
+        const wasRequested = !!rental.completeRequestedBy;
+        const wasRequestedByOther =
+          rental.completeRequestedBy && rental.completeRequestedBy !== user?.id;
+
+        const updated = await rentalService.completeRental(id!);
+
+        // 如果是首次发起（之前没有请求），发送订单卡片消息给对方
+        if (!wasRequested && updated.completeRequestedBy) {
+          const otherUser = isOwner ? rental.renter : rental.owner;
+          try {
+            const socket = await getSocket().catch(() => null);
+            if (socket?.connected) {
+              sendSocketMessage({
+                receiverId: otherUser.id,
+                content: '我已发起订单完成确认，请确认',
+                type: 'order',
+                rentalId: rental.id,
+              });
+            } else {
+              // HTTP 兜底
+              await messageService.sendMessage({
+                receiverId: otherUser.id,
+                type: 'order',
+                content: '我已发起订单完成确认，请确认',
+                extra: rental.id,
+                productId: rental.productId,
+              });
+            }
+          } catch (e) {
+            console.error('发送订单卡片失败:', e);
+          }
+        }
+
+        refetch();
+      } catch (err: any) {
+        console.error('操作失败:', err);
+      } finally {
+        setUpdating(false);
+      }
+    };
+
+    let title = '发起完成确认';
+    let msg = '确定发起订单完成确认吗？对方确认后订单将完成。';
+    let type: 'primary' | 'danger' | 'default' = 'primary';
+
+    if (rental.completeRequestedBy === user?.id) {
+      title = '撤销完成确认';
+      msg = '确定要撤销本次完成确认吗？';
+      type = 'default';
+    } else if (rental.completeRequestedBy) {
+      title = '确认完成订单';
+      msg = '对方已发起完成确认，确认后订单将变为已完成状态。';
+      type = 'primary';
     }
 
-    setUpdating(true);
-    try {
-      await rentalService.updateRentalStatus(id!, { status });
-      Alert.alert('成功', '操作成功');
-      refetch();
-    } catch (err: any) {
-      Alert.alert('失败', err.response?.data?.message || '操作失败');
-    } finally {
-      setUpdating(false);
-    }
+    showConfirm(title, msg, doComplete, type);
   };
 
   const handleAction = (action: string) => {
@@ -153,7 +250,7 @@ export default function RentalDetailPage() {
         handleUpdateStatus('cancelled', '确定取消该订单吗？');
         break;
       case 'complete':
-        handleUpdateStatus('completed', '确认订单已完成？');
+        handleComplete();
         break;
       case 'rent-again':
         router.push({ pathname: '/rent', params: { id: rental?.productId } });
@@ -268,12 +365,7 @@ export default function RentalDetailPage() {
           <TouchableOpacity
             style={styles.productRow}
             activeOpacity={0.7}
-            onPress={() =>
-              router.push({
-                pathname: '/detail',
-                params: { id: rental.productId },
-              })
-            }
+            onPress={goToProductDetail}
           >
             {rental.product.images && rental.product.images.length > 0 ? (
               <Image source={{ uri: rental.product.images[0] }} style={styles.productImage} />
@@ -365,6 +457,43 @@ export default function RentalDetailPage() {
 
       {/* 底部操作栏 */}
       {renderActions()}
+
+      {/* 自定义确认弹窗 */}
+      <Modal
+        visible={confirmVisible}
+        transparent
+        animationType='fade'
+        onRequestClose={() => setConfirmVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalMask}
+          activeOpacity={1}
+          onPress={() => setConfirmVisible(false)}
+        >
+          <TouchableOpacity style={styles.modalContent} activeOpacity={1}>
+            <Text style={styles.modalTitle}>{confirmTitle}</Text>
+            <Text style={styles.modalMessage}>{confirmMessage}</Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalBtnCancel}
+                onPress={() => setConfirmVisible(false)}
+              >
+                <Text style={styles.modalBtnCancelText}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalBtnConfirm,
+                  confirmType === 'danger' && styles.modalBtnDanger,
+                  confirmType === 'default' && styles.modalBtnDefault,
+                ]}
+                onPress={handleConfirm}
+              >
+                <Text style={styles.modalBtnConfirmText}>确定</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -592,5 +721,70 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: theme.fontSizes.md,
     color: theme.colors.text_default,
+  },
+  // 自定义确认弹窗
+  modalMask: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  modalContent: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    paddingTop: 24,
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#111',
+    marginBottom: 10,
+  },
+  modalMessage: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  modalBtnCancel: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#F5F6F8',
+    alignItems: 'center',
+  },
+  modalBtnCancelText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#666',
+  },
+  modalBtnConfirm: {
+    flex: 1,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: theme.colors.selected,
+    alignItems: 'center',
+  },
+  modalBtnConfirmText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  modalBtnDanger: {
+    backgroundColor: '#EF4444',
+  },
+  modalBtnDefault: {
+    backgroundColor: '#333',
   },
 });

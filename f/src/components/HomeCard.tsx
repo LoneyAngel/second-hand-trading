@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View, Image, ImageSourcePropType, TouchableOpacity } from 'react-native';
 import { theme } from '../../theme';
 import { router } from 'expo-router';
+import { useDebouncedPress } from '~/hooks/useDebouncedPress';
 
 interface CardProps {
   id?: string;
@@ -19,12 +20,12 @@ export default function HomeCard({
   avatarImage = require('@assets/image/2.png'),
   id = '1',
 }: CardProps) {
-  const handlePress = () => {
+  const handlePress = useDebouncedPress(() => {
     router.push({
       pathname: '/detail',
       params: { id, title, price },
     });
-  };
+  });
 
   return (
     <TouchableOpacity style={styles.container} onPress={handlePress} activeOpacity={0.7}>

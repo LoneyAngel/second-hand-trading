@@ -61,6 +61,7 @@ export interface RentalRecord {
   totalAmount: number;
   deposit: number;
   status: RentalStatus;
+  completeRequestedBy?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -255,10 +256,26 @@ export interface AddressListResponse {
 // ==================== 消息/聊天相关类型 ====================
 
 /** 消息类型 */
-export type MessageType = 'text' | 'image' | 'system' | 'product';
+export type MessageType = 'text' | 'image' | 'system' | 'product' | 'order';
 
 /** 消息状态 */
 export type MessageStatus = 'sending' | 'sent' | 'failed' | 'read';
+
+/** 订单消息附带的订单信息 */
+export interface OrderMessageData {
+  orderId: string;
+  productId: string;
+  productTitle: string;
+  productImage: string;
+  productPrice: number;
+  status: string; // pending | ongoing | completed | cancelled | disputed
+  startDate: string;
+  endDate: string;
+  totalAmount: number;
+  /** 发起完成确认的用户ID（ongoing状态下，非空表示等待另一方确认） */
+  completeRequestedBy?: string;
+  action?: 'request_complete' | 'confirm_complete' | 'cancel' | 'accept' | 'info';
+}
 
 /** 单条消息 */
 export interface Message {
@@ -268,8 +285,17 @@ export interface Message {
   receiverId: string;
   type: MessageType;
   content: string;
-  /** 图片消息的图片 URL，或商品消息的商品 ID */
+  /** 图片消息的图片 URL，或商品/订单消息的扩展信息 */
   extra?: string;
+  /** 订单消息的订单详情（type === 'order' 时存在） */
+  order?: OrderMessageData;
+  /** 商品消息的商品详情（type === 'product' 时存在） */
+  productInfo?: {
+    id: string;
+    title: string;
+    image: string;
+    price: number;
+  };
   status: MessageStatus;
   createdAt: string;
 }

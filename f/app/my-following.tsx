@@ -12,10 +12,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { theme } from '../theme';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '../src/hooks/useQuery';
 import { productService } from '../src/services';
 import { useAuth } from '../src/hooks/useAuth';
+import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
 
 export default function MyFollowingPage() {
   const { isAuthenticated } = useAuth();
@@ -53,6 +54,25 @@ export default function MyFollowingPage() {
     }
   };
 
+  // 跳转登录页
+  const goToSign = useDebouncedPress(() => {
+    router.push('/sign');
+  });
+
+  // 跳转用户主页（参数化防抖）
+  const userProfileLockRef = useRef(false);
+  const goToUserProfile = (userId: string) => {
+    if (userProfileLockRef.current) return;
+    userProfileLockRef.current = true;
+    router.push({
+      pathname: '/public-personal',
+      params: { userId },
+    });
+    setTimeout(() => {
+      userProfileLockRef.current = false;
+    }, 800);
+  };
+
   if (!isAuthenticated) {
     return (
       <SafeAreaView style={styles.container}>
@@ -68,7 +88,7 @@ export default function MyFollowingPage() {
         </View>
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>请先登录</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => router.push('/sign')}>
+          <TouchableOpacity style={styles.retryButton} onPress={goToSign}>
             <Text style={styles.retryButtonText}>去登录</Text>
           </TouchableOpacity>
         </View>
@@ -130,12 +150,7 @@ export default function MyFollowingPage() {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.userCard}
-            onPress={() => {
-              router.push({
-                pathname: '/public-personal',
-                params: { userId: item.id },
-              });
-            }}
+            onPress={() => goToUserProfile(item.id)}
           >
             <View style={styles.avatarWrapper}>
               {item.avatar ? (

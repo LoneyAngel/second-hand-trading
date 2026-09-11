@@ -3,6 +3,7 @@ import { theme } from '../../theme';
 import { router } from 'expo-router';
 import type { PriceUnit, Product } from '../types';
 import AntDesign from '@expo/vector-icons/AntDesign';
+import { useDebouncedPress } from '../hooks/useDebouncedPress';
 
 interface SimpleProductCardProps {
   product: Product;
@@ -20,12 +21,12 @@ const PRICE_UNITS: { value: PriceUnit; label: string }[] = [
 ];
 
 export default function SmallCard({ product }: SimpleProductCardProps) {
-  const handlePress = () => {
+  const handlePress = useDebouncedPress(() => {
     router.push({
       pathname: '/detail',
       params: { id: product.id },
     });
-  };
+  });
 
   return (
     <TouchableOpacity style={styles.container} onPress={handlePress} activeOpacity={0.7}>

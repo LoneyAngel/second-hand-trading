@@ -17,6 +17,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { useAuth } from '~/hooks/useAuth'; // 🚀 引入认证 Hook
+import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
 
 // 🚀 定义全局大厂高级青
 const THEME_CYAN = '#0D9488';
@@ -25,6 +26,14 @@ export default function LoginScreen() {
   const { login, isLoading } = useAuth();
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+
+  const goToRegister = useDebouncedPress(() => {
+    router.replace('/register');
+  });
+
+  const goToHome = useDebouncedPress(() => {
+    router.replace('/(tabs)');
+  });
 
   const handleLogin = async () => {
     if (!phone.trim() || !password.trim()) {
@@ -111,11 +120,11 @@ export default function LoginScreen() {
 
           {/* 底部跳转 */}
           <View style={styles.footer}>
-            <TouchableOpacity onPress={() => router.replace('/register')} activeOpacity={0.6}>
+            <TouchableOpacity onPress={goToRegister} activeOpacity={0.6}>
               <Text style={styles.footerText}>还没有账号？立即注册</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              onPress={() => router.replace('/(tabs)')}
+              onPress={goToHome}
               activeOpacity={0.6}
               style={{ marginTop: 12 }}
             >
