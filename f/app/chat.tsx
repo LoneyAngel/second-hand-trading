@@ -19,10 +19,14 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import { theme } from '../theme';
 import { useAuth } from '../src/hooks/useAuth';
 import { messageService, rentalService } from '../src/services';
-import type { Message } from '../src/types';
+import type { Message, RentalStatus } from '../src/types';
 import { getSocket, markSocketRead, sendSocketMessage } from '../src/utils/socket';
 import type { Socket } from 'socket.io-client';
 import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
+import { MessageCard1, MessageCard2 } from '../src/components/MessageCard';
+import type { OrderInfoData } from '../src/components/MessageCard';
+import ConfirmModal from '../src/components/ConfirmModal';
+import type { ConfirmType } from '../src/components/ConfirmModal';
 
 export default function ChatPage() {
   const params = useLocalSearchParams<{
@@ -47,6 +51,20 @@ export default function ChatPage() {
   const otherUserId = params.userId || '';
   const otherUserName = params.userName || '用户';
   const otherUserAvatar = params.userAvatar || '';
+
+  // 确认弹窗
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    title: string;
+    message: string;
+    type: ConfirmType;
+    onConfirm: () => void;
+  }>({
+    title: '',
+    message: '',
+    type: 'primary',
+    onConfirm: () => {},
+  });
 
   // 滚动到底部
   const scrollToBottom = useCallback(() => {
@@ -226,24 +244,68 @@ export default function ChatPage() {
     setInputText(msg.content);
   };
 
+  // 从 extra 解析订单数据
+  const parseOrderExtra = (extra?: string): OrderInfoData | undefined => {
+    if (!extra) return undefined;
+    try {
+      const parsed = JSON.parse(extra);
+      return parsed && parsed.orderId ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  // 构造对方用户信息（给 MessageCard2 用）
+  const otherUserInfo = {
+    id: otherUserId,
+    name: otherUserName,
+    avatar: otherUserAvatar,
+  };
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    type: ConfirmType = 'primary',
+  ) => {
+    setConfirmConfig({ title, message, type, onConfirm });
+    setConfirmVisible(true);
+  };
+  const handleUpdateStatus = (status: RentalStatus, confirmText?: string, id?: string) => {
+    console.log('执行更改');
+
+    const doUpdate = async () => {
+      try {
+        await rentalService.updateRentalStatus(id!, { status });
+      } catch (err: any) {
+        // 错误由 showConfirm 不捕获，这里兜底
+        console.error('操作失败:', err);
+      }
+    };
+
+    if (confirmText) {
+      console.log('confirmText');
+      showConfirm('确认操作', confirmText, doUpdate, status === 'cancelled' ? 'danger' : 'primary');
+    } else {
+      doUpdate();
+    }
+  };
   // 处理订单卡片上的"确认完成"操作
   const handleOrderComplete = async (orderId: string) => {
     try {
       const updated = await rentalService.completeRental(orderId);
-      // 更新本地消息中的订单状态
+      // 更新本地消息中的订单状态（更新 extra 里的 JSON）
       setMessages((prev) =>
-        prev.map((m) =>
-          m.type === 'order' && m.order?.orderId === orderId
-            ? {
-                ...m,
-                order: {
-                  ...m.order!,
-                  status: updated.status,
-                  completeRequestedBy: updated.completeRequestedBy || undefined,
-                },
-              }
-            : m,
-        ),
+        prev.map((m) => {
+          if (m.type !== 'order') return m;
+          const order = parseOrderExtra(m.extra);
+          if (!order || order.orderId !== orderId) return m;
+          const newOrder = {
+            ...order,
+            status: updated.status,
+            completeRequestedBy: updated.completeRequestedBy || undefined,
+          };
+          return { ...m, extra: JSON.stringify(newOrder) };
+        }),
       );
     } catch (err: any) {
       Alert.alert('提示', err.response?.data?.message || '操作失败');
@@ -253,6 +315,7 @@ export default function ChatPage() {
   // 跳转订单详情（参数化防抖，与 useDebouncedPress 同款 800ms 锁）
   const orderDetailLockRef = useRef(false);
   const goToOrderDetail = (orderId: string) => {
+    console.log('执行跳转');
     if (orderDetailLockRef.current) return;
     orderDetailLockRef.current = true;
     router.push({ pathname: '/rental-detail', params: { id: orderId } });
@@ -269,7 +332,9 @@ export default function ChatPage() {
   const renderMessage = ({ item }: { item: Message }) => {
     const isMe = item.senderId === user?.id;
     const showRead = isMe && item.status === 'read';
-    const isOrder = item.type === 'order' && item.order;
+    // console.log(item);
+    const orderData = parseOrderExtra(item.extra);
+    const isOrder = item.type === 'order' && !!orderData;
 
     return (
       <View style={{ gap: 2 }}>
@@ -286,49 +351,27 @@ export default function ChatPage() {
             </View>
           )}
 
-          {isOrder ? (
-            <View style={[styles.orderCard, isMe ? styles.orderCardRight : styles.orderCardLeft]}>
-              <TouchableOpacity
-                style={styles.orderCardHeader}
-                onPress={() => goToOrderDetail(item.order!.orderId)}
-              >
-                <Image source={{ uri: item.order!.productImage }} style={styles.orderProductImg} />
-                <View style={styles.orderProductInfo}>
-                  <Text style={styles.orderProductTitle} numberOfLines={2}>
-                    {item.order!.productTitle}
-                  </Text>
-                  <Text style={styles.orderProductPrice}>￥{item.order!.productPrice}/天</Text>
-                </View>
-                <AntDesign name='right' size={14} color={theme.colors.text_gray} />
-              </TouchableOpacity>
-
-              <View style={styles.orderCardBody}>
-                <Text style={[styles.orderStatusText, isMe && styles.orderStatusTextRight]}>
-                  {item.content}
-                </Text>
-              </View>
-
-              {/* 操作按钮：对方发起了完成确认，我是接收方时显示"确认完成" */}
-              {item.order!.status === 'ongoing' &&
-                item.order!.completeRequestedBy &&
-                item.order!.completeRequestedBy !== user?.id && (
-                  <View style={styles.orderCardActions}>
-                    <TouchableOpacity
-                      style={[styles.orderBtn, styles.orderBtnPrimary]}
-                      onPress={() => handleOrderComplete(item.order!.orderId)}
-                    >
-                      <Text style={styles.orderBtnTextPrimary}>确认完成</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-
-              {/* 发起方显示"等待对方确认" */}
-              {item.order!.status === 'ongoing' && item.order!.completeRequestedBy === user?.id && (
-                <View style={styles.orderCardActions}>
-                  <Text style={styles.orderWaitingText}>等待对方确认…</Text>
-                </View>
-              )}
-            </View>
+          {isOrder && orderData ? (
+            orderData.status === 'pending' ? (
+              <MessageCard2
+                data={orderData}
+                position={isMe ? 'right' : 'left'}
+                user={otherUserInfo}
+                onPress={() => goToOrderDetail(orderData.orderId)}
+                showActions={!isMe}
+                onAccept={() => handleUpdateStatus('ongoing', '确定接受订单？', orderData.orderId)}
+                onCancel={() =>
+                  handleUpdateStatus('cancelled', '确定拒绝订单？', orderData.orderId)
+                }
+              />
+            ) : (
+              <MessageCard1
+                data={{ ...orderData, currentUserId: user?.id }}
+                position={isMe ? 'right' : 'left'}
+                onPress={() => goToOrderDetail(orderData.orderId)}
+                onConfirmComplete={() => handleOrderComplete(orderData.orderId)}
+              />
+            )
           ) : (
             <View style={[styles.bubble, isMe ? styles.bubbleRight : styles.bubbleLeft]}>
               <Text style={[styles.bubbleText, isMe && styles.bubbleTextRight]}>
@@ -355,10 +398,7 @@ export default function ChatPage() {
   const renderProductCard = () => {
     if (!params.productId || !params.productTitle) return null;
     return (
-      <TouchableOpacity
-        style={styles.productCard}
-        onPress={goToProductDetail}
-      >
+      <TouchableOpacity style={styles.productCard} onPress={goToProductDetail}>
         {params.productImage ? (
           <Image source={{ uri: params.productImage }} style={styles.productImg} />
         ) : (
@@ -445,6 +485,15 @@ export default function ChatPage() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -622,84 +671,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
-  },
-  // 订单卡片
-  orderCard: {
-    width: 260,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E8E8E8',
-  },
-  orderCardLeft: {
-    borderBottomLeftRadius: 4,
-  },
-  orderCardRight: {
-    borderBottomRightRadius: 4,
-  },
-  orderCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    gap: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F1F3',
-  },
-  orderProductImg: {
-    width: 48,
-    height: 48,
-    borderRadius: 6,
-    backgroundColor: theme.colors.bg_gray,
-  },
-  orderProductInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  orderProductTitle: {
-    fontSize: 13,
-    color: theme.colors.text_default,
-    lineHeight: 18,
-    fontWeight: '500',
-  },
-  orderProductPrice: {
-    fontSize: 13,
-    color: theme.colors.text_price,
-    fontWeight: '600',
-  },
-  orderCardBody: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  orderStatusText: {
-    fontSize: 13,
-    color: theme.colors.text_secondary,
-  },
-  orderStatusTextRight: {
-    textAlign: 'right',
-  },
-  orderCardActions: {
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-  },
-  orderBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  orderBtnPrimary: {
-    backgroundColor: theme.colors.selected,
-  },
-  orderBtnTextPrimary: {
-    fontSize: 13,
-    color: '#fff',
-    fontWeight: '600',
-  },
-  orderWaitingText: {
-    fontSize: 12,
-    color: theme.colors.text_gray,
   },
 });

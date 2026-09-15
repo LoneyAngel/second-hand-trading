@@ -1,7 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import * as SecureStore from 'expo-secure-store';
 
-const SOCKET_URL = 'http://10.131.201.163:3001';
+const SOCKET_URL = 'http://10.142.17.163:3001';
 
 let socket: Socket | null = null;
 let connectPromise: Promise<Socket> | null = null;

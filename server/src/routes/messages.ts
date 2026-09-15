@@ -17,9 +17,10 @@ type MessageWithRelations = Message & {
 const sendMessageSchema = z.object({
   receiverId: z.string().min(1, '接收者ID不能为空'),
   content: z.string().min(1, '消息内容不能为空'),
-  type: z.enum(['text', 'image', 'system', 'product']).default('text'),
+  type: z.enum(['text', 'image', 'system', 'product', 'order']).default('text'),
   extra: z.string().optional(),
   productId: z.string().optional(),
+  rentalId: z.string().optional(),
 });
 
 // 将 DB Message 转为前端 Message 格式
@@ -29,7 +30,7 @@ function formatMessage(msg: Message & { product?: Product | null }) {
     id: msg.id,
     senderId: msg.senderId,
     receiverId: msg.receiverId,
-    type: (msg.type || 'text') as 'text' | 'image' | 'system' | 'product',
+    type: (msg.type || 'text') as 'text' | 'image' | 'system' | 'product' | 'order',
     content: msg.content,
     extra: msg.extra || undefined,
     status: (msg.isRead ? 'read' : 'sent') as 'sent' | 'read',
@@ -79,18 +80,14 @@ messagesRouter.get(
     >();
 
     for (const msg of messages) {
-      const otherUser =
-        msg.senderId === currentUserId ? msg.receiver : msg.sender;
+      const otherUser = msg.senderId === currentUserId ? msg.receiver : msg.sender;
       const otherUserId = otherUser.id;
 
       if (conversationMap.has(otherUserId)) continue;
 
       // 计算未读数：对方发给我的、未读的消息数量
       const unreadCount = messages.filter(
-        (m) =>
-          m.senderId === otherUserId &&
-          m.receiverId === currentUserId &&
-          !m.isRead,
+        (m) => m.senderId === otherUserId && m.receiverId === currentUserId && !m.isRead,
       ).length;
 
       const conversation: {
@@ -154,10 +151,7 @@ messagesRouter.get(
     const currentUserId = req.user!.userId;
     const targetUserId = String(req.params.userId);
     const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
-    const pageSize = Math.min(
-      100,
-      parseInt(String(req.query.pageSize || '20')) || 20,
-    );
+    const pageSize = Math.min(100, parseInt(String(req.query.pageSize || '20')) || 20);
 
     // 验证对方用户是否存在
     const targetUser = await prisma.user.findUnique({
@@ -193,6 +187,37 @@ messagesRouter.get(
         product: true,
       },
     });
+
+    // 订单消息：查询最新订单状态覆盖 extra 里的旧快照
+    const orderMsgs = messages.filter((m) => m.type === 'order' && m.extra);
+    if (orderMsgs.length > 0) {
+      const rentalIds = orderMsgs.map((m) => JSON.parse(m.extra!).orderId as string);
+      const rentals = await prisma.rentalRecord.findMany({
+        where: { id: { in: rentalIds } },
+        include: {
+          product: { select: { id: true, title: true, images: true, price: true } },
+        },
+      });
+      const rentalMap = new Map(rentals.map((r) => [r.id, r]));
+      for (const msg of messages) {
+        if (msg.type !== 'order' || !msg.extra) continue;
+        const orderId = JSON.parse(msg.extra).orderId as string;
+        const rental = rentalMap.get(orderId);
+        if (!rental) continue;
+        (msg as any).extra = JSON.stringify({
+          orderId: rental.id,
+          productId: rental.productId,
+          productTitle: rental.product?.title || '',
+          productImage: (rental.product?.images as string[])?.[0] || '',
+          productPrice: Number(rental.product?.price || 0),
+          status: rental.status,
+          startDate: rental.startDate.toISOString(),
+          endDate: rental.endDate.toISOString(),
+          totalAmount: Number(rental.totalAmount),
+          completeRequestedBy: rental.completeRequestedBy || undefined,
+        });
+      }
+    }
 
     // 按时间倒序返回（最新的在前，前端展示时再翻转）
     const data = messages.map((msg) => ({
@@ -235,13 +260,39 @@ messagesRouter.post(
       throw new ApiError(404, '接收者不存在');
     }
 
+    let extraValue = body.extra;
+
+    // 订单消息：通过 rentalId 查询订单详情并序列化到 extra
+    if (body.type === 'order' && body.rentalId) {
+      const rental = await prisma.rentalRecord.findUnique({
+        where: { id: body.rentalId },
+        include: {
+          product: { select: { id: true, title: true, images: true, price: true } },
+        },
+      });
+      if (rental) {
+        extraValue = JSON.stringify({
+          orderId: rental.id,
+          productId: rental.productId,
+          productTitle: rental.product?.title || '',
+          productImage: (rental.product?.images as string[])?.[0] || '',
+          productPrice: Number(rental.product?.price || 0),
+          status: rental.status,
+          startDate: rental.startDate.toISOString(),
+          endDate: rental.endDate.toISOString(),
+          totalAmount: Number(rental.totalAmount),
+          completeRequestedBy: rental.completeRequestedBy || undefined,
+        });
+      }
+    }
+
     const message = await prisma.message.create({
       data: {
         senderId,
         receiverId: body.receiverId,
         content: body.content,
         type: body.type,
-        extra: body.extra,
+        extra: extraValue,
         productId: body.productId,
       },
       include: {

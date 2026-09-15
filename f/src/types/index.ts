@@ -285,10 +285,8 @@ export interface Message {
   receiverId: string;
   type: MessageType;
   content: string;
-  /** 图片消息的图片 URL，或商品/订单消息的扩展信息 */
+  /** 图片消息的图片 URL，或订单消息的订单 JSON 字符串等扩展信息 */
   extra?: string;
-  /** 订单消息的订单详情（type === 'order' 时存在） */
-  order?: OrderMessageData;
   /** 商品消息的商品详情（type === 'product' 时存在） */
   productInfo?: {
     id: string;
@@ -339,4 +337,5 @@ export interface SendMessageData {
   content: string;
   extra?: string;
   productId?: string;
+  rentalId?: string;
 }

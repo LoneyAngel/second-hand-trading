@@ -18,12 +18,7 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { useQuery } from '../src/hooks/useQuery';
-import {
-  addressService,
-  productService,
-  rentalService,
-  messageService,
-} from '../src/services';
+import { addressService, productService, rentalService, messageService } from '../src/services';
 import { useAuth } from '../src/hooks/useAuth';
 import { getDefaultGreeting } from '../src/utils/defaultGreeting';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -137,19 +132,27 @@ export default function RentPage() {
     }
     setIsSubmitting(true);
     try {
-      await rentalService.createRental({
+      const rental = await rentalService.createRental({
         productId: id!,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       });
-      // 自动发送默认打招呼语
+      // 自动发送默认打招呼语 + 订单消息
       try {
         const greeting = await getDefaultGreeting();
+        if (greeting?.trim()) {
+          await messageService.sendMessage({
+            receiverId: product!.user.id,
+            type: 'text',
+            content: greeting,
+            productId: id!,
+          });
+        }
         await messageService.sendMessage({
           receiverId: product!.user.id,
-          type: 'text',
-          content: greeting,
-          productId: id!,
+          type: 'order',
+          content: '新订单，请查收',
+          rentalId: rental.id,
         });
       } catch (e) {
         console.error('发送默认打招呼语失败:', e);

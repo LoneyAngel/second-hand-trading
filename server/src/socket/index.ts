@@ -79,8 +79,9 @@ export function setupSocket(server: HttpServer) {
             },
           });
 
-          // 如果是订单消息，查询订单详情
+          // 如果是订单消息，查询订单详情并序列化到 extra
           let rental = null;
+          let orderExtra = extra;
           if (type === 'order' && rentalId) {
             rental = await prisma.rentalRecord.findUnique({
               where: { id: rentalId },
@@ -88,9 +89,28 @@ export function setupSocket(server: HttpServer) {
                 product: { select: { id: true, title: true, images: true, price: true } },
               },
             });
+            if (rental) {
+              orderExtra = JSON.stringify({
+                orderId: rental.id,
+                productId: rental.productId,
+                productTitle: rental.product?.title || '',
+                productImage: (rental.product?.images as string[])?.[0] || '',
+                productPrice: Number(rental.product?.price || 0),
+                status: rental.status,
+                startDate: rental.startDate.toISOString(),
+                endDate: rental.endDate.toISOString(),
+                totalAmount: Number(rental.totalAmount),
+                completeRequestedBy: rental.completeRequestedBy || undefined,
+              });
+              // 更新数据库中的 extra 字段
+              await prisma.message.update({
+                where: { id: message.id },
+                data: { extra: orderExtra },
+              });
+            }
           }
 
-          const formatted = formatMessage(message, rental);
+          const formatted = formatMessage(message, rental, orderExtra);
 
           // 发送给接收者
           socket.to(`user:${receiverId}`).emit('message:receive', formatted);
@@ -154,9 +174,10 @@ export function setupSocket(server: HttpServer) {
 // 格式化消息为前端需要的结构
 function formatMessage(
   msg: Message & { product?: Product | null },
-  rental?: any,
+  _rental?: any,
+  extraOverride?: string,
 ) {
-  const base = {
+  return {
     id: msg.id,
     conversationId: msg.receiverId, // 单聊场景用对方ID作为会话ID（发送方视角）
     senderId: msg.senderId,
@@ -168,7 +189,7 @@ function formatMessage(
       | 'product'
       | 'order',
     content: msg.content,
-    extra: msg.extra || undefined,
+    extra: extraOverride ?? msg.extra ?? undefined,
     status: (msg.isRead ? 'read' : 'sent') as 'sent' | 'read',
     createdAt: msg.createdAt.toISOString(),
     productInfo: msg.product
@@ -180,23 +201,6 @@ function formatMessage(
         }
       : undefined,
   };
-
-  if (rental) {
-    (base as any).order = {
-      orderId: rental.id,
-      productId: rental.productId,
-      productTitle: rental.product?.title || '',
-      productImage: (rental.product?.images as string[])?.[0] || '',
-      productPrice: Number(rental.product?.price || 0),
-      status: rental.status,
-      startDate: rental.startDate.toISOString(),
-      endDate: rental.endDate.toISOString(),
-      totalAmount: Number(rental.totalAmount),
-      completeRequestedBy: rental.completeRequestedBy || undefined,
-    };
-  }
-
-  return base;
 }
 
 // 触发某用户的会话列表更新事件

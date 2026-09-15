@@ -18,7 +18,7 @@ import { useAuth } from '../../src/hooks/useAuth';
 import { useQuery } from '../../src/hooks/useQuery';
 import { authService, productService } from '../../src/services';
 import { router } from 'expo-router';
-import { ReactElement, useCallback } from 'react';
+import { ReactElement } from 'react';
 import { useDebouncedPress } from '../../src/hooks/useDebouncedPress';
 
 const ORDER_TABS: { label: string; icon: ReactElement }[] = [
@@ -99,10 +99,7 @@ export default function Mine_Page() {
         <View style={styles.loginPromptContainer}>
           <FontAwesome5 name='user-astronaut' size={64} color={theme.colors.text_default} />
           <Text style={styles.loginPromptText}>登录后查看更多内容</Text>
-          <Pressable
-            style={styles.loginButton}
-            onPress={goToLogin}
-          >
+          <Pressable style={styles.loginButton} onPress={goToLogin}>
             <Text style={styles.loginButtonText}>登录 / 注册</Text>
           </Pressable>
         </View>
@@ -198,24 +195,15 @@ export default function Mine_Page() {
           }}
         >
           <View style={{ flexDirection: 'row', justifyContent: 'space-around', gap: 10 }}>
-            <Pressable
-              style={styles.iconTextButton}
-              onPress={goToFootprints}
-            >
+            <Pressable style={styles.iconTextButton} onPress={goToFootprints}>
               <Text style={styles.iconNumber}>{footprintsCount?.count ?? 0}</Text>
               <Text style={styles.iconText}>我的浏览</Text>
             </Pressable>
-            <Pressable
-              style={styles.iconTextButton}
-              onPress={goToFavorites}
-            >
+            <Pressable style={styles.iconTextButton} onPress={goToFavorites}>
               <Text style={styles.iconNumber}>{favoriteCount?.data ? favoriteCount?.data : 0}</Text>
               <Text style={styles.iconText}>我的收藏</Text>
             </Pressable>
-            <Pressable
-              style={styles.iconTextButton}
-              onPress={goToFollowing}
-            >
+            <Pressable style={styles.iconTextButton} onPress={goToFollowing}>
               <Text style={styles.iconNumber}>{followingCount?.count ?? 0}</Text>
               <Text style={styles.iconText}>我的关注</Text>
             </Pressable>
@@ -234,10 +222,7 @@ export default function Mine_Page() {
         ]}
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.lg }}>
-          <Pressable
-            style={styles.textButton}
-            onPress={goToMyProducts}
-          >
+          <Pressable style={styles.textButton} onPress={goToMyProducts}>
             {/* <Feather name='shopping-bag' size={24} color={theme.colors.text_default} /> */}
             <MaterialCommunityIcons name='package-variant-closed-plus' size={24} />
             <Text style={styles.tabLabel}>我的发布</Text>
@@ -271,10 +256,7 @@ export default function Mine_Page() {
             <Entypo name='chevron-small-right' size={20} color={theme.colors.text_secondary} />
           </Pressable>
 
-          <Pressable
-            style={styles.menuItem}
-            onPress={handleFeedback}
-          >
+          <Pressable style={styles.menuItem} onPress={handleFeedback}>
             <Text style={styles.text}>意见反馈</Text>
             <Entypo name='chevron-small-right' size={20} color={theme.colors.text_secondary} />
           </Pressable>

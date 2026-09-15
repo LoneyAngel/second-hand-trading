@@ -19,11 +19,16 @@ import { messageService } from '../../src/services';
 import type { Conversation } from '../../src/types';
 import { getSocket } from '../../src/utils/socket';
 import type { Socket } from 'socket.io-client';
-
+import { useAuth } from '~/hooks';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
+import { useDebouncedPress } from '~/hooks/useDebouncedPress';
 export default function MessagesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   const boundRef = useRef(false);
+  const pressLockRef = useRef(false);
+  const goToLogin = useDebouncedPress(() => router.push({ pathname: '/login' }));
+  const { isAuthenticated } = useAuth();
 
   const {
     data: conversations,
@@ -65,6 +70,19 @@ export default function MessagesPage() {
       };
     }, [refetch]),
   );
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.bg_gray }}>
+        <View style={styles.loginPromptContainer}>
+          <FontAwesome5 name='user-astronaut' size={64} color={theme.colors.text_default} />
+          <Text style={styles.loginPromptText}>登录后查看更多内容</Text>
+          <Pressable style={styles.loginButton} onPress={goToLogin}>
+            <Text style={styles.loginButtonText}>登录 / 注册</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -75,7 +93,6 @@ export default function MessagesPage() {
     }
   };
 
-  const pressLockRef = useRef(false);
   const handlePressConversation = (item: Conversation) => {
     if (pressLockRef.current) return;
     pressLockRef.current = true;
@@ -284,5 +301,30 @@ const styles = StyleSheet.create({
   emptyHint: {
     fontSize: 13,
     color: theme.colors.text_gray,
+  },
+  loginPromptContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingTop: 100,
+    gap: 20,
+  },
+  loginPromptText: {
+    fontSize: theme.fontSizes.lg,
+    fontWeight: '400',
+    lineHeight: theme.fontSizes.lg + 4,
+    color: theme.colors.text_secondary,
+  },
+  loginButton: {
+    paddingHorizontal: 40,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.button_bg_default,
+    borderRadius: theme.radii.md,
+  },
+  loginButtonText: {
+    fontSize: theme.fontSizes.lg,
+    fontWeight: '500',
+    lineHeight: theme.fontSizes.lg + 4,
+    color: theme.colors.text_default,
   },
 });

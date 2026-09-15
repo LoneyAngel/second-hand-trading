@@ -6,7 +6,6 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -20,6 +19,8 @@ import { useAuth } from '../src/hooks/useAuth';
 import { useState } from 'react';
 import type { RentalRecord, RentalStatus } from '../src/types';
 import { getSocket, sendSocketMessage } from '../src/utils/socket';
+import ConfirmModal from '../src/components/ConfirmModal';
+import type { ConfirmType } from '../src/components/ConfirmModal';
 
 const STATUS_TEXT: Record<RentalStatus, string> = {
   pending: '待确认',
@@ -50,11 +51,19 @@ export default function RentalDetailPage() {
   const { user } = useAuth();
   const [updating, setUpdating] = useState(false);
   // 自定义确认弹窗状态
+  // 确认弹窗
   const [confirmVisible, setConfirmVisible] = useState(false);
-  const [confirmTitle, setConfirmTitle] = useState('');
-  const [confirmMessage, setConfirmMessage] = useState('');
-  const [confirmType, setConfirmType] = useState<'default' | 'danger' | 'primary'>('default');
-  const confirmActionRef = useState<(() => void) | null>(null);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    title: string;
+    message: string;
+    type: ConfirmType;
+    onConfirm: () => void;
+  }>({
+    title: '',
+    message: '',
+    type: 'primary',
+    onConfirm: () => {},
+  });
 
   const {
     data: rental,
@@ -136,20 +145,10 @@ export default function RentalDetailPage() {
     title: string,
     message: string,
     onConfirm: () => void,
-    type: 'default' | 'danger' | 'primary' = 'primary',
+    type: ConfirmType = 'primary',
   ) => {
-    setConfirmTitle(title);
-    setConfirmMessage(message);
-    setConfirmType(type);
-    confirmActionRef[1](() => onConfirm);
+    setConfirmConfig({ title, message, type, onConfirm });
     setConfirmVisible(true);
-  };
-
-  const handleConfirm = () => {
-    setConfirmVisible(false);
-    setTimeout(() => {
-      confirmActionRef[0]?.();
-    }, 100);
   };
 
   const handleUpdateStatus = (status: RentalStatus, confirmText?: string) => {
@@ -204,8 +203,7 @@ export default function RentalDetailPage() {
                 receiverId: otherUser.id,
                 type: 'order',
                 content: '我已发起订单完成确认，请确认',
-                extra: rental.id,
-                productId: rental.productId,
+                rentalId: rental.id,
               });
             }
           } catch (e) {
@@ -242,9 +240,6 @@ export default function RentalDetailPage() {
     switch (action) {
       case 'accept':
         handleUpdateStatus('ongoing', '确定接受该订单吗？');
-        break;
-      case 'confirm':
-        handleUpdateStatus('ongoing', '确认开始租赁吗？');
         break;
       case 'cancel':
         handleUpdateStatus('cancelled', '确定取消该订单吗？');
@@ -292,7 +287,6 @@ export default function RentalDetailPage() {
       } else if (isRenter) {
         // 承租方：取消订单 + 确认订单
         buttons.push({ label: '取消订单', action: 'cancel', danger: true });
-        buttons.push({ label: '确认订单', action: 'confirm', primary: true });
       }
     } else if (status === 'ongoing') {
       // 双方都可以取消或完成订单
@@ -458,42 +452,15 @@ export default function RentalDetailPage() {
       {/* 底部操作栏 */}
       {renderActions()}
 
-      {/* 自定义确认弹窗 */}
-      <Modal
+      {/* 确认弹窗 */}
+      <ConfirmModal
         visible={confirmVisible}
-        transparent
-        animationType='fade'
-        onRequestClose={() => setConfirmVisible(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalMask}
-          activeOpacity={1}
-          onPress={() => setConfirmVisible(false)}
-        >
-          <TouchableOpacity style={styles.modalContent} activeOpacity={1}>
-            <Text style={styles.modalTitle}>{confirmTitle}</Text>
-            <Text style={styles.modalMessage}>{confirmMessage}</Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.modalBtnCancel}
-                onPress={() => setConfirmVisible(false)}
-              >
-                <Text style={styles.modalBtnCancelText}>取消</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.modalBtnConfirm,
-                  confirmType === 'danger' && styles.modalBtnDanger,
-                  confirmType === 'default' && styles.modalBtnDefault,
-                ]}
-                onPress={handleConfirm}
-              >
-                <Text style={styles.modalBtnConfirmText}>确定</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -721,70 +688,5 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: theme.fontSizes.md,
     color: theme.colors.text_default,
-  },
-  // 自定义确认弹窗
-  modalMask: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
-  },
-  modalContent: {
-    width: '100%',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    paddingTop: 24,
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#111',
-    marginBottom: 10,
-  },
-  modalMessage: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 12,
-  },
-  modalBtnCancel: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: '#F5F6F8',
-    alignItems: 'center',
-  },
-  modalBtnCancelText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#666',
-  },
-  modalBtnConfirm: {
-    flex: 1,
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: theme.colors.selected,
-    alignItems: 'center',
-  },
-  modalBtnConfirmText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#fff',
-  },
-  modalBtnDanger: {
-    backgroundColor: '#EF4444',
-  },
-  modalBtnDefault: {
-    backgroundColor: '#333',
   },
 });
