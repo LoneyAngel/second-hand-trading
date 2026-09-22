@@ -23,6 +23,8 @@ import PublishButton from '~/components/GreenButton';
 import * as ImagePicker from 'expo-image-picker';
 import type { PriceUnit } from '../src/types';
 import CModal from '~/components/Modal';
+import ConfirmModal from '../src/components/ConfirmModal';
+import type { ConfirmType } from '../src/components/ConfirmModal';
 
 const THEME_CYAN = '#0D9488';
 
@@ -78,6 +80,28 @@ export default function UploadPage() {
   const [priceUnit, setPriceUnit] = useState<PriceUnit>('day');
   const [showPriceUnitModal, setShowPriceUnitModal] = useState(false);
   const [showImagePickerModal, setShowImagePickerModal] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    title: string;
+    message: string;
+    type: ConfirmType;
+    onConfirm: () => void;
+  }>({
+    title: '',
+    message: '',
+    type: 'primary',
+    onConfirm: () => {},
+  });
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    type: ConfirmType = 'primary',
+  ) => {
+    setConfirmConfig({ title, message, type, onConfirm });
+    setConfirmVisible(true);
+  };
 
   useEffect(() => {
     loadCategories();
@@ -198,30 +222,22 @@ export default function UploadPage() {
 
   // 删除本地图片
   const removeLocalImage = (index: number) => {
-    Alert.alert('确认删除', '确定要删除这张图片吗？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () => {
-          setLocalImages((prev) => prev.filter((_, i) => i !== index));
-        },
-      },
-    ]);
+    showConfirm(
+      '确认删除',
+      '确定要删除这张图片吗？',
+      () => setLocalImages((prev) => prev.filter((_, i) => i !== index)),
+      'danger',
+    );
   };
 
   // 删除已上传的 OSS 图片
   const removeOssImage = (index: number) => {
-    Alert.alert('确认删除', '确定要删除这张图片吗？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: () => {
-          setOssImages((prev) => prev.filter((_, i) => i !== index));
-        },
-      },
-    ]);
+    showConfirm(
+      '确认删除',
+      '确定要删除这张图片吗？',
+      () => setOssImages((prev) => prev.filter((_, i) => i !== index)),
+      'danger',
+    );
   };
 
   const handleSubmit = async () => {
@@ -540,6 +556,16 @@ export default function UploadPage() {
           </View>
         </View>
       </CModal>
+
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        confirmText='删除'
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }

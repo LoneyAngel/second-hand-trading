@@ -8,6 +8,8 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import Entypo from '@expo/vector-icons/Entypo';
 import { useState } from 'react';
 import CModal from './Modal';
+import ConfirmModal from './ConfirmModal';
+import type { ConfirmType } from './ConfirmModal';
 import { productService } from '../services';
 
 interface MyProductCardProps {
@@ -31,6 +33,28 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function MyProductCard({ product, onRefresh }: MyProductCardProps) {
   const [menuVisible, setMenuVisible] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    title: string;
+    message: string;
+    type: ConfirmType;
+    onConfirm: () => void;
+  }>({
+    title: '',
+    message: '',
+    type: 'primary',
+    onConfirm: () => {},
+  });
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    type: ConfirmType = 'primary',
+  ) => {
+    setConfirmConfig({ title, message, type, onConfirm });
+    setConfirmVisible(true);
+  };
 
   const handlePress = () => {
     router.push({
@@ -47,23 +71,21 @@ export default function MyProductCard({ product, onRefresh }: MyProductCardProps
   };
 
   const handleOffline = () => {
-    Alert.alert('确认下架', '下架后商品将不再展示，确定要下架吗？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '确定下架',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await productService.updateProduct(product.id, { status: 'delist' });
-            Alert.alert('成功', '商品已下架');
-            onRefresh?.();
-          } catch (error: any) {
-            const msg = error.response?.data?.message || '下架失败，请重试';
-            Alert.alert('失败', msg);
-          }
-        },
+    showConfirm(
+      '确认下架',
+      '下架后商品将不再展示，确定要下架吗？',
+      async () => {
+        try {
+          await productService.updateProduct(product.id, { status: 'delist' });
+          Alert.alert('成功', '商品已下架');
+          onRefresh?.();
+        } catch (error: any) {
+          const msg = error.response?.data?.message || '下架失败，请重试';
+          Alert.alert('失败', msg);
+        }
       },
-    ]);
+      'danger',
+    );
   };
 
   const handleShare = async () => {
@@ -215,6 +237,16 @@ export default function MyProductCard({ product, onRefresh }: MyProductCardProps
           </TouchableOpacity>
         </View>
       </CModal>
+
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        confirmText='确定下架'
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmVisible(false)}
+      />
     </View>
   );
 }

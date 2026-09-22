@@ -19,9 +19,33 @@ import { useQuery } from '../src/hooks/useQuery';
 import { addressService } from '../src/services';
 import type { Address } from '../src/types';
 import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
+import ConfirmModal from '../src/components/ConfirmModal';
+import type { ConfirmType } from '../src/components/ConfirmModal';
 
 export default function AddressesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    title: string;
+    message: string;
+    type: ConfirmType;
+    onConfirm: () => void;
+  }>({
+    title: '',
+    message: '',
+    type: 'primary',
+    onConfirm: () => {},
+  });
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    type: ConfirmType = 'primary',
+  ) => {
+    setConfirmConfig({ title, message, type, onConfirm });
+    setConfirmVisible(true);
+  };
 
   const {
     data: addressList,
@@ -50,22 +74,20 @@ export default function AddressesPage() {
   };
 
   const handleDelete = (addr: Address) => {
-    Alert.alert('确认删除', '确定要删除这个地址吗？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '删除',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await addressService.deleteAddress(addr.id);
-            await refetch();
-          } catch (error: any) {
-            const msg = error.response?.data?.message || '删除失败';
-            Alert.alert('失败', msg);
-          }
-        },
+    showConfirm(
+      '确认删除',
+      '确定要删除这个地址吗？',
+      async () => {
+        try {
+          await addressService.deleteAddress(addr.id);
+          await refetch();
+        } catch (error: any) {
+          const msg = error.response?.data?.message || '删除失败';
+          Alert.alert('失败', msg);
+        }
       },
-    ]);
+      'danger',
+    );
   };
 
   // 跳转地址编辑页（参数化防抖）
@@ -177,6 +199,16 @@ export default function AddressesPage() {
           <Text style={styles.addButtonText}>新增地址</Text>
         </TouchableOpacity>
       </View>
+
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        confirmText='删除'
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }

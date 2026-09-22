@@ -21,6 +21,8 @@ import {
   setDefaultGreeting,
   DEFAULT_GREETING,
 } from '../src/utils/defaultGreeting';
+import ConfirmModal from '../src/components/ConfirmModal';
+import type { ConfirmType } from '../src/components/ConfirmModal';
 
 export default function SettingsPage() {
   const { logout } = useAuth();
@@ -29,6 +31,28 @@ export default function SettingsPage() {
   const [greeting, setGreeting] = useState(DEFAULT_GREETING);
   const [greetingModalVisible, setGreetingModalVisible] = useState(false);
   const [greetingInput, setGreetingInput] = useState('');
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    title: string;
+    message: string;
+    type: ConfirmType;
+    onConfirm: () => void;
+  }>({
+    title: '',
+    message: '',
+    type: 'primary',
+    onConfirm: () => {},
+  });
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    type: ConfirmType = 'primary',
+  ) => {
+    setConfirmConfig({ title, message, type, onConfirm });
+    setConfirmVisible(true);
+  };
 
   // 加载存储的打招呼语
   useEffect(() => {
@@ -49,13 +73,7 @@ export default function SettingsPage() {
   };
 
   const handleLogout = async () => {
-    Alert.alert('提示', '确定要退出登录吗？', [
-      { text: '取消', style: 'cancel' },
-      {
-        text: '确定',
-        onPress: logout,
-      },
-    ]);
+    showConfirm('提示', '确定要退出登录吗？', logout, 'default');
   };
 
   return (
@@ -264,6 +282,15 @@ export default function SettingsPage() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      <ConfirmModal
+        visible={confirmVisible}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        type={confirmConfig.type}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmVisible(false)}
+      />
     </SafeAreaView>
   );
 }
