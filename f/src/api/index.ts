@@ -4,3 +4,4 @@ export { categoriesApi } from './categories';
 export { rentalsApi } from './rentals';
 export { addressesApi } from './addresses';
 export { messagesApi } from './messages';
+export { aiApi } from './ai';

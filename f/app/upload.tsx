@@ -18,6 +18,7 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { productService, categoryService } from '../src/services';
+import { aiApi } from '../src/api';
 import { useAuth } from '../src/hooks/useAuth';
 import PublishButton from '~/components/GreenButton';
 import * as ImagePicker from 'expo-image-picker';
@@ -80,6 +81,8 @@ export default function UploadPage() {
   const [priceUnit, setPriceUnit] = useState<PriceUnit>('day');
   const [showPriceUnitModal, setShowPriceUnitModal] = useState(false);
   const [showImagePickerModal, setShowImagePickerModal] = useState(false);
+  const [beautifying, setBeautifying] = useState(false);
+  const [descRefreshKey, setDescRefreshKey] = useState(0);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<{
     title: string;
@@ -238,6 +241,45 @@ export default function UploadPage() {
       () => setOssImages((prev) => prev.filter((_, i) => i !== index)),
       'danger',
     );
+  };
+
+  // AI 美化商品描述
+  const handleBeautifyDescription = async () => {
+    if (!title.trim()) {
+      Alert.alert('提示', '请先填写商品标题，AI 才能更好地帮你美化描述哦~');
+      return;
+    }
+    if (beautifying) return;
+
+    setBeautifying(true);
+    try {
+      // 找到选中的分类名称
+      const categoryName = categories.find((c) => c.id === selectedCategory)?.name;
+
+      const priceNum = price ? parseFloat(price) : NaN;
+      const depositNum = deposit ? parseFloat(deposit) : NaN;
+
+      const result = await aiApi.beautifyDescription({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        price: !isNaN(priceNum) && priceNum > 0 ? priceNum : undefined,
+        deposit: !isNaN(depositNum) && depositNum >= 0 ? depositNum : undefined,
+        categoryName,
+        priceUnit,
+      });
+
+      if (result?.beautifiedDescription) {
+        setDescription(result.beautifiedDescription);
+        // 刷新 key 强制 TextInput 重绘，解决 RN TextInput 受控值不更新显示的问题
+        setDescRefreshKey((k) => k + 1);
+      }
+    } catch (error: any) {
+      const errMsg = error?.response?.data?.error || error?.message || '网络错误';
+      Alert.alert('提示', 'AI 美化功能暂不可用，请稍后再试');
+      console.warn('AI 美化失败:', errMsg);
+    } finally {
+      setBeautifying(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -406,8 +448,26 @@ export default function UploadPage() {
                 </View>
 
                 <View>
-                  <Text style={styles.sectionTitle}>商品描述</Text>
+                  <View style={styles.descriptionHeader}>
+                    <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>商品描述</Text>
+                    <TouchableOpacity
+                      style={[styles.aiBeautifyButton, beautifying && styles.aiBeautifyButtonDisabled]}
+                      onPress={handleBeautifyDescription}
+                      disabled={beautifying}
+                      activeOpacity={0.7}
+                    >
+                      {beautifying ? (
+                        <ActivityIndicator size='small' color={THEME_CYAN} />
+                      ) : (
+                        <>
+                          <AntDesign name='bulb' size={12} color={THEME_CYAN} />
+                          <Text style={styles.aiBeautifyText}>AI 美化</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                   <TextInput
+                    key={descRefreshKey}
                     style={[styles.input, styles.textArea]}
                     placeholder='描述一下商品的成色、租用须知...'
                     placeholderTextColor='#A3AED0'
@@ -621,6 +681,30 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     color: '#1B2559',
     marginBottom: 8,
+  },
+  descriptionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  aiBeautifyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(13, 148, 136, 0.08)',
+    borderRadius: 14,
+  },
+  aiBeautifyButtonDisabled: {
+    opacity: 0.6,
+  },
+  aiBeautifyText: {
+    fontSize: 12,
+    fontWeight: '500',
+    lineHeight: 16,
+    color: THEME_CYAN,
   },
   imageGrid: {
     flexDirection: 'row',

@@ -11,6 +11,7 @@ import { addressesRouter } from './routes/addresses';
 import { uploadRouter } from './routes/upload';
 import { adminRouter } from './routes/admin';
 import { messagesRouter } from './routes/messages';
+import { aiRouter } from './routes/ai';
 import { errorHandler } from './middleware/errorHandler';
 import { setupSocket } from './socket';
 
@@ -45,6 +46,7 @@ app.use('/api/addresses', addressesRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/messages', messagesRouter);
+app.use('/api/ai', aiRouter);
 
 // 健康检查
 app.get('/api/health', (_req, res) => {

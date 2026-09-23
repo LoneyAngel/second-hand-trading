@@ -19,9 +19,11 @@
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,md,css,scss}\""
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.71",
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "@types/multer": "^2.2.0",
+    "ai": "^7.0.107",
     "ali-oss": "^6.23.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
