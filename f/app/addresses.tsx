@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { theme } from '../theme';
-import { useQuery } from '../src/hooks/useQuery';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { addressService } from '../src/services';
 import type { Address } from '../src/types';
 import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
@@ -47,11 +47,16 @@ export default function AddressesPage() {
     setConfirmVisible(true);
   };
 
+  const queryClient = useQueryClient();
+
   const {
     data: addressList,
-    loading,
+    isPending: loading,
     refetch,
-  } = useQuery(() => addressService.getAddresses().then((res) => res.data), { enabled: true });
+  } = useQuery({
+    queryKey: ['addresses'],
+    queryFn: () => addressService.getAddresses().then((res) => res.data),
+  });
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -62,30 +67,32 @@ export default function AddressesPage() {
     }
   };
 
-  const handleSetDefault = async (addr: Address) => {
+  // 设为默认
+  const setDefaultMutation = useMutation({
+    mutationFn: (id: string) => addressService.setDefaultAddress(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['addresses'] });
+    },
+  });
+
+  const handleSetDefault = (addr: Address) => {
     if (addr.isDefault) return;
-    try {
-      await addressService.setDefaultAddress(addr.id);
-      await refetch();
-    } catch (error: any) {
-      const msg = error.response?.data?.message || '设置失败';
-      Alert.alert('失败', msg);
-    }
+    setDefaultMutation.mutate(addr.id);
   };
+
+  // 删除地址
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => addressService.deleteAddress(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['addresses'] });
+    },
+  });
 
   const handleDelete = (addr: Address) => {
     showConfirm(
       '确认删除',
       '确定要删除这个地址吗？',
-      async () => {
-        try {
-          await addressService.deleteAddress(addr.id);
-          await refetch();
-        } catch (error: any) {
-          const msg = error.response?.data?.message || '删除失败';
-          Alert.alert('失败', msg);
-        }
-      },
+      () => deleteMutation.mutate(addr.id),
       'danger',
     );
   };

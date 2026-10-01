@@ -65,6 +65,11 @@ export interface RentalRecord {
   createdAt: string;
   updatedAt: string;
 }
+export interface RentalListResponse {
+  data: RentalRecord[];
+  hasMore: boolean;
+  page: number;
+}
 
 // 认证相关类型
 export interface AuthResponse {
@@ -123,6 +128,7 @@ export interface ProductListParams {
 export interface ProductListResponse {
   data: Product[];
   hasMore: boolean;
+  page: number;
 }
 
 // 推荐商品分组类型
@@ -155,6 +161,7 @@ export interface MessageResponse {
 
 export interface ProductDetail extends Product {
   isFavorited: boolean;
+  isFollowing?: boolean;
 }
 
 export interface FootPrint {

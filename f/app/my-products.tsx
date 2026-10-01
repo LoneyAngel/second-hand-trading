@@ -5,14 +5,15 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   FlatList,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 import { router } from 'expo-router';
-import { useState, useEffect } from 'react';
-import { useQuery } from '../src/hooks/useQuery';
+import { useState } from 'react';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { productService } from '../src/services';
-import type { ProductStatus, Product } from '../src/types';
+import type { ProductStatus } from '../src/types';
 import MyProductCard from '../src/components/MyProductCard';
 import Entypo from '@expo/vector-icons/Entypo';
 import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
@@ -26,75 +27,56 @@ const FILTERS: { label: string; value: ProductStatus | 'all' }[] = [
 
 export default function MyProductsPage() {
   const [selectedFilter, setSelectedFilter] = useState<ProductStatus | 'all'>('all');
-  const [page, setPage] = useState(1);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  console.log('selectedFilter', selectedFilter);
+  const {
+    data,
+    isPending,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch,
+    error,
+    isRefetching,
+  } = useInfiniteQuery({
+    queryKey: ['myProducts', selectedFilter],
 
-  const { data, loading, error, refetch } = useQuery(
-    () =>
+    queryFn: ({ pageParam }) =>
       productService.getMyProductsPaginated({
-        page: page,
+        page: pageParam,
         limit: 10,
         status: selectedFilter === 'all' ? undefined : selectedFilter,
       }),
-    {},
-    [page, selectedFilter],
-  );
 
-  useEffect(() => {
-    if (page === 1 && Array.isArray(data?.data)) {
-      setAllProducts(data?.data);
-    } else if (data?.data) {
-      setAllProducts((prev) => {
-        const existingIds = new Set(prev.map((p) => p.id));
-        const newItems = data.data.filter((p) => !existingIds.has(p.id));
-        return [...prev, ...newItems];
-      });
-    }
-  }, [data?.data]);
+    initialPageParam: 1,
 
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.page + 1 : undefined;
+    },
+  });
+  const allProducts = data?.pages.flatMap((page) => page.data) ?? [];
   const goToUpload = useDebouncedPress(() => {
     router.push('/upload');
   });
-
-  const hasMore = data?.hasMore || false;
-
-  const handleFilterChange = (filter: ProductStatus | 'all') => {
-    if (selectedFilter !== filter) {
-      setSelectedFilter(filter);
-      setPage(1);
-      setAllProducts([]);
-    }
-  };
-
-  const handleLoadMore = () => {
-    if (!loading && hasMore) {
-      setPage((prev) => prev + 1);
-    }
-  };
-
   const renderEmptyComponent = () => {
-    if (error && allProducts.length === 0) {
+    if (isPending) {
       return (
-        <View style={styles.loadingContainer}>
+        <View style={styles.emptyWrapper}>
+          <ActivityIndicator size='large' color={theme.colors.text_default} />
+        </View>
+      );
+    }
+    if (error) {
+      return (
+        <View style={styles.emptyWrapper}>
           <Text style={styles.errorText}>加载失败</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryButtonText}>重试</Text>
           </TouchableOpacity>
         </View>
       );
     }
-
-    if (loading && allProducts.length === 0) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size='large' color={theme.colors.text_default} />
-          <Text style={styles.loadingText}>加载中...</Text>
-        </View>
-      );
-    }
-
     return (
-      <View style={styles.emptyContainer}>
+      <View style={styles.emptyWrapper}>
         <Text style={styles.emptyText}>暂无商品</Text>
         <TouchableOpacity style={styles.publishButton} onPress={goToUpload}>
           <Text style={styles.publishButtonText}>发布商品</Text>
@@ -124,7 +106,7 @@ export default function MyProductsPage() {
               styles.filterChip,
               selectedFilter === filter.value && styles.filterChipSelected,
             ]}
-            onPress={() => handleFilterChange(filter.value)}
+            onPress={() => setSelectedFilter(filter.value)}
           >
             <Text
               style={[
@@ -145,24 +127,41 @@ export default function MyProductsPage() {
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={true}
-        onEndReached={handleLoadMore}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        }}
         onEndReachedThreshold={0.2}
-        contentContainerStyle={[styles.listContent, allProducts.length === 0 && { flex: 1 }]}
+        contentContainerStyle={[
+          styles.listContent,
+          allProducts.length === 0 && styles.listContentEmpty,
+        ]}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <View style={styles.cardWrapper}>
             <MyProductCard product={item} onRefresh={refetch} />
           </View>
         )}
-        ListEmptyComponent={renderEmptyComponent}
+        ListEmptyComponent={renderEmptyComponent()}
         ListFooterComponent={
-          loading && allProducts.length > 0 ? (
+          isFetchingNextPage ? (
             <View style={styles.loadMoreContainer}>
               <ActivityIndicator size='small' color={theme.colors.text_default} />
             </View>
           ) : (
             <View style={{ height: 20 }} />
           )
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            colors={[theme.colors.selected]}
+            tintColor={theme.colors.selected}
+            title='加载中...'
+            titleColor='#999999'
+          />
         }
       />
     </SafeAreaView>
@@ -223,19 +222,6 @@ const styles = StyleSheet.create({
     color: theme.colors.text_default,
     fontWeight: '500',
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: theme.colors.bg_gray,
-  },
-  loadingText: {
-    marginTop: 10,
-    color: theme.colors.text_secondary,
-    fontSize: theme.fontSizes.lg,
-    lineHeight: theme.fontSizes.lg + 4,
-    fontWeight: '400',
-  },
   errorText: {
     color: theme.colors.text_price,
     fontSize: theme.fontSizes.lg,
@@ -259,12 +245,19 @@ const styles = StyleSheet.create({
     padding: theme.spacing.sm,
     gap: theme.spacing.sm,
   },
-  cardWrapper: {},
-  emptyContainer: {
-    flex: 1,
+  listContentEmpty: {
+    flexGrow: 1,
+  },
+  emptyWrapper: {
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 60,
+    gap: 10,
+  },
+  cardWrapper: {},
+  emptyContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
     gap: 20,
   },
   emptyText: {

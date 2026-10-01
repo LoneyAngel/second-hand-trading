@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   TextInput,
-  Alert,
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
@@ -17,6 +16,7 @@ import {
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState, useEffect } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { productService, categoryService } from '../src/services';
 import { aiApi } from '../src/api';
 import { useAuth } from '../src/hooks/useAuth';
@@ -25,34 +25,10 @@ import * as ImagePicker from 'expo-image-picker';
 import type { PriceUnit } from '../src/types';
 import CModal from '~/components/Modal';
 import ConfirmModal from '../src/components/ConfirmModal';
-import type { ConfirmType } from '../src/components/ConfirmModal';
+import type { ConfirmType, ConfirmMode } from '../src/components/ConfirmModal';
+import { formatAmountInput } from '~/utils/format';
 
 const THEME_CYAN = '#0D9488';
-
-// 过滤金额输入：只允许数字和一个小数点，最多 2 位小数，去除前导零，保证 > 0
-const formatAmountInput = (value: string): string => {
-  if (!value) return '';
-  // 只保留数字和小数点
-  let cleaned = value.replace(/[^\d.]/g, '');
-  // 只保留第一个小数点
-  const firstDotIndex = cleaned.indexOf('.');
-  if (firstDotIndex !== -1) {
-    cleaned =
-      cleaned.slice(0, firstDotIndex + 1) + cleaned.slice(firstDotIndex + 1).replace(/\./g, '');
-  }
-  // 去除前导零（但保留 0.xx 形式，以及输入过程中的单个 0）
-  if (cleaned.length > 1 && cleaned.startsWith('0') && cleaned[1] !== '.') {
-    cleaned = cleaned.replace(/^0+/, '') || '0';
-  }
-  // 最多 2 位小数
-  if (firstDotIndex !== -1) {
-    const parts = cleaned.split('.');
-    if (parts[1].length > 2) {
-      cleaned = parts[0] + '.' + parts[1].slice(0, 2);
-    }
-  }
-  return cleaned;
-};
 
 const PRICE_UNITS: { value: PriceUnit; label: string }[] = [
   { value: 'day', label: '/天' },
@@ -63,6 +39,7 @@ const PRICE_UNITS: { value: PriceUnit; label: string }[] = [
 export default function UploadPage() {
   const { id, mode } = useLocalSearchParams<{ id?: string; mode?: string }>();
   const isEdit = mode === 'edit';
+  const queryClient = useQueryClient();
 
   const { isAuthenticated } = useAuth();
   const [title, setTitle] = useState('');
@@ -70,9 +47,6 @@ export default function UploadPage() {
   const [price, setPrice] = useState('');
   const [deposit, setDeposit] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingProduct, setLoadingProduct] = useState(isEdit);
   // 本地选中的图片 uri（新增时使用，发布时才上传到 OSS）
   const [localImages, setLocalImages] = useState<string[]>([]);
   // 已上传到 OSS 的图片 url（编辑模式加载已有图片时使用）
@@ -81,18 +55,21 @@ export default function UploadPage() {
   const [priceUnit, setPriceUnit] = useState<PriceUnit>('day');
   const [showPriceUnitModal, setShowPriceUnitModal] = useState(false);
   const [showImagePickerModal, setShowImagePickerModal] = useState(false);
-  const [beautifying, setBeautifying] = useState(false);
   const [descRefreshKey, setDescRefreshKey] = useState(0);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<{
     title: string;
     message: string;
     type: ConfirmType;
+    mode: ConfirmMode;
+    confirmText: string;
     onConfirm: () => void;
   }>({
     title: '',
     message: '',
     type: 'primary',
+    mode: 'confirm',
+    confirmText: '确定',
     onConfirm: () => {},
   });
 
@@ -101,30 +78,49 @@ export default function UploadPage() {
     message: string,
     onConfirm: () => void,
     type: ConfirmType = 'primary',
+    confirmText = '确定',
   ) => {
-    setConfirmConfig({ title, message, type, onConfirm });
+    setConfirmConfig({ title, message, type, mode: 'confirm', confirmText, onConfirm });
     setConfirmVisible(true);
   };
 
-  useEffect(() => {
-    loadCategories();
-    if (isEdit && id) {
-      loadProduct(id);
-    }
-  }, [id, isEdit]);
-
-  const loadCategories = async () => {
-    try {
-      const data = await categoryService.getCategories();
-      setCategories(data);
-    } catch (error) {
-      console.error('Failed to load categories:', error);
-    }
+  const showAlert = (
+    title: string,
+    message: string,
+    onConfirm?: () => void,
+    type: ConfirmType = 'primary',
+  ) => {
+    setConfirmConfig({
+      title,
+      message,
+      type,
+      mode: 'alert',
+      confirmText: '确定',
+      onConfirm: onConfirm || (() => {}),
+    });
+    setConfirmVisible(true);
   };
 
-  const loadProduct = async (productId: string) => {
-    try {
-      const product = await productService.getProduct(productId);
+  // 分类列表
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => categoryService.getCategories(),
+  });
+
+  // 编辑模式：加载商品详情
+  const {
+    data: product,
+    isPending: loadingProduct,
+    error: productError,
+  } = useQuery({
+    queryKey: ['product', id, 'edit'],
+    queryFn: () => productService.getProduct(id!),
+    enabled: isEdit && !!id,
+  });
+
+  // 编辑模式：把商品详情同步到表单
+  useEffect(() => {
+    if (product) {
       setTitle(product.title);
       setDescription(product.description || '');
       setPrice(String(product.price));
@@ -132,13 +128,74 @@ export default function UploadPage() {
       setSelectedCategory(product.categoryId);
       setOssImages(product.images || []);
       setPriceUnit(product.priceUnit || 'day');
-    } catch (error) {
-      console.error('Failed to load product:', error);
-      Alert.alert('错误', '加载商品信息失败');
-    } finally {
-      setLoadingProduct(false);
     }
-  };
+  }, [product]);
+
+  // 发布/更新商品
+  const submitMutation = useMutation({
+    mutationFn: async (params: { images: string[] }) => {
+      const { images } = params;
+      const payload = {
+        title,
+        description,
+        price: parseFloat(price),
+        deposit: parseFloat(deposit),
+        images,
+        categoryId: selectedCategory!,
+        priceUnit,
+      };
+      if (isEdit && id) {
+        return productService.updateProduct(id, payload);
+      }
+      return productService.createProduct(payload);
+    },
+    onSuccess: () => {
+      // 刷新相关列表
+      queryClient.invalidateQueries({ queryKey: ['myProducts'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['adviseProducts'] });
+      if (isEdit) {
+        queryClient.invalidateQueries({ queryKey: ['product', id] });
+      }
+      showAlert('成功', isEdit ? '商品更新成功！' : '商品发布成功！', () => router.back());
+    },
+    onError: () => {
+      showAlert(
+        '失败',
+        isEdit ? '更新商品失败，请重试' : '发布商品失败，请重试',
+        undefined,
+        'danger',
+      );
+    },
+  });
+
+  // AI 美化描述
+  const beautifyMutation = useMutation({
+    mutationFn: () => {
+      const categoryName = categories.find((c) => c.id === selectedCategory)?.name;
+      const priceNum = price ? parseFloat(price) : NaN;
+      const depositNum = deposit ? parseFloat(deposit) : NaN;
+      return aiApi.beautifyDescription({
+        title: title.trim(),
+        description: description.trim() || undefined,
+        price: !isNaN(priceNum) && priceNum > 0 ? priceNum : undefined,
+        deposit: !isNaN(depositNum) && depositNum >= 0 ? depositNum : undefined,
+        categoryName,
+        priceUnit,
+      });
+    },
+    onSuccess: (result) => {
+      if (result?.data) {
+        setDescription(result.data);
+        setDescRefreshKey((k) => k + 1);
+      }
+    },
+    onError: (error: any) => {
+      const errMsg = error?.response?.data?.error || error?.message || '网络错误';
+      showAlert('提示', 'AI 美化功能暂不可用，请稍后再试');
+      console.warn('AI 美化失败:', errMsg);
+    },
+  });
 
   const showPriceUnitOptions = () => setShowPriceUnitModal(true);
   const selectPriceUnit = (unit: PriceUnit) => {
@@ -160,7 +217,7 @@ export default function UploadPage() {
           : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!permissionResult.granted) {
-        Alert.alert('提示', '需要您的授权才能访问相机或相册');
+        showAlert('提示', '需要您的授权才能访问相机或相册');
         return;
       }
 
@@ -182,14 +239,14 @@ export default function UploadPage() {
       if (!result.canceled && result.assets[0]) {
         const totalCount = localImages.length + ossImages.length;
         if (totalCount >= 6) {
-          Alert.alert('提示', '最多上传 6 张图片');
+          showAlert('提示', '最多上传 6 张图片');
           return;
         }
         setLocalImages((prev) => [...prev, result.assets[0].uri]);
       }
     } catch (error) {
       console.error('Failed to pick image:', error);
-      Alert.alert('错误', '选择图片失败');
+      showAlert('错误', '选择图片失败', undefined, 'danger');
     }
   };
 
@@ -246,96 +303,39 @@ export default function UploadPage() {
   // AI 美化商品描述
   const handleBeautifyDescription = async () => {
     if (!title.trim()) {
-      Alert.alert('提示', '请先填写商品标题，AI 才能更好地帮你美化描述哦~');
+      showAlert('提示', '请先填写商品标题，AI 才能更好地帮你美化描述哦~');
       return;
     }
-    if (beautifying) return;
-
-    setBeautifying(true);
-    try {
-      // 找到选中的分类名称
-      const categoryName = categories.find((c) => c.id === selectedCategory)?.name;
-
-      const priceNum = price ? parseFloat(price) : NaN;
-      const depositNum = deposit ? parseFloat(deposit) : NaN;
-
-      const result = await aiApi.beautifyDescription({
-        title: title.trim(),
-        description: description.trim() || undefined,
-        price: !isNaN(priceNum) && priceNum > 0 ? priceNum : undefined,
-        deposit: !isNaN(depositNum) && depositNum >= 0 ? depositNum : undefined,
-        categoryName,
-        priceUnit,
-      });
-
-      if (result?.beautifiedDescription) {
-        setDescription(result.beautifiedDescription);
-        // 刷新 key 强制 TextInput 重绘，解决 RN TextInput 受控值不更新显示的问题
-        setDescRefreshKey((k) => k + 1);
-      }
-    } catch (error: any) {
-      const errMsg = error?.response?.data?.error || error?.message || '网络错误';
-      Alert.alert('提示', 'AI 美化功能暂不可用，请稍后再试');
-      console.warn('AI 美化失败:', errMsg);
-    } finally {
-      setBeautifying(false);
-    }
+    await beautifyMutation.mutateAsync();
   };
 
   const handleSubmit = async () => {
     const totalImages = ossImages.length + localImages.length;
     if (!title || !price || !selectedCategory) {
-      Alert.alert('提示', '请填写必要信息');
+      showAlert('提示', '请填写必要信息');
       return;
     }
     if (totalImages === 0) {
-      Alert.alert('提示', '请至少上传一张商品图片');
+      showAlert('提示', '请至少上传一张商品图片');
       return;
     }
     if (!isAuthenticated) {
-      Alert.alert('提示', '请先登录');
+      showAlert('提示', '请先登录');
       return;
     }
 
-    setLoading(true);
+    // 先把本地选中的图片批量上传到 OSS，再提交 mutation
     try {
-      // 先把本地选中的图片批量上传到 OSS
       const uploadedUrls = await uploadLocalImages();
-      // 合并已有 OSS 图片和新上传的图片
       const allImages = [...ossImages, ...uploadedUrls];
-
-      if (isEdit && id) {
-        await productService.updateProduct(id, {
-          title,
-          description,
-          price: parseFloat(price),
-          deposit: parseFloat(deposit),
-          images: allImages,
-          categoryId: selectedCategory,
-          priceUnit,
-        });
-        Alert.alert('成功', '商品更新成功！', [{ text: '确定', onPress: () => router.back() }]);
-      } else {
-        await productService.createProduct({
-          title,
-          description,
-          price: parseFloat(price),
-          deposit: parseFloat(deposit),
-          images: allImages,
-          categoryId: selectedCategory,
-          priceUnit,
-        });
-        Alert.alert('成功', '商品发布成功！', [{ text: '确定', onPress: () => router.back() }]);
-      }
-    } catch (error) {
-      Alert.alert('失败', isEdit ? '更新商品失败，请重试' : '发布商品失败，请重试');
-    } finally {
-      setLoading(false);
+      submitMutation.mutate({ images: allImages });
+    } catch (e) {
+      showAlert('失败', '图片上传失败，请重试', undefined, 'danger');
     }
   };
 
   // 🚀 1. 优化骨架屏状态：黑边隔离与安全区域适配
-  if (loadingProduct) {
+  if (loadingProduct && isEdit) {
     return (
       <View style={styles.container}>
         <SafeAreaView edges={['top']} style={styles.safeHeader}>
@@ -376,7 +376,10 @@ export default function UploadPage() {
             <Text style={styles.headerTitle}>{isEdit ? '编辑商品' : '发布商品'}</Text>
           </View>
           <View style={styles.headerRight}>
-            <PublishButton onPress={handleSubmit} disabled={loading} />
+            <PublishButton
+              onPress={handleSubmit}
+              disabled={submitMutation.isPending || uploadingImage}
+            />
           </View>
         </View>
       </SafeAreaView>
@@ -451,12 +454,15 @@ export default function UploadPage() {
                   <View style={styles.descriptionHeader}>
                     <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>商品描述</Text>
                     <TouchableOpacity
-                      style={[styles.aiBeautifyButton, beautifying && styles.aiBeautifyButtonDisabled]}
+                      style={[
+                        styles.aiBeautifyButton,
+                        beautifyMutation.isPending && styles.aiBeautifyButtonDisabled,
+                      ]}
                       onPress={handleBeautifyDescription}
-                      disabled={beautifying}
+                      disabled={beautifyMutation.isPending}
                       activeOpacity={0.7}
                     >
-                      {beautifying ? (
+                      {beautifyMutation.isPending ? (
                         <ActivityIndicator size='small' color={THEME_CYAN} />
                       ) : (
                         <>
@@ -622,7 +628,8 @@ export default function UploadPage() {
         title={confirmConfig.title}
         message={confirmConfig.message}
         type={confirmConfig.type}
-        confirmText='删除'
+        mode={confirmConfig.mode}
+        confirmText={confirmConfig.confirmText}
         onConfirm={confirmConfig.onConfirm}
         onCancel={() => setConfirmVisible(false)}
       />

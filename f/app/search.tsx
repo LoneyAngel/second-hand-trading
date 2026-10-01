@@ -8,13 +8,13 @@ import {
   FlatList,
   RefreshControl,
 } from 'react-native';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { theme } from '../theme';
 import SearchBar from '../src/components/SearchBar';
 import Card from '../src/components/ShopCard';
-import { useQuery } from '../src/hooks/useQuery';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { productService } from '../src/services';
-import type { ProductStatus, Product } from '../src/types';
+import type { ProductStatus } from '../src/types';
 import { useLocalSearchParams } from 'expo-router/build/hooks';
 import { router } from 'expo-router';
 import Entypo from '@expo/vector-icons/Entypo';
@@ -27,76 +27,34 @@ const FILTERS: { label: string; value: ProductStatus | 'all' }[] = [
 
 export default function Search_Page() {
   const [selectedFilter, setSelectedFilter] = useState<ProductStatus | 'all'>('all');
-  const [page, setPage] = useState(1);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
   const { keyword } = useLocalSearchParams<{ keyword: string }>();
 
-  // 当 keyword 变化时重置搜索
-  useEffect(() => {
-    setPage(1);
-    setAllProducts([]);
-  }, [keyword]);
+  const {
+    data: productData,
+    fetchNextPage,
+    hasNextPage,
+    refetch,
+    isRefetching,
+    isFetchingNextPage,
+    isPending,
+    error,
+  } = useInfiniteQuery({
+    queryKey: ['products', selectedFilter],
 
-  const { data, loading, error, refetch } = useQuery(
-    () =>
-      productService.search({
-        keyword: keyword,
-        page: page,
+    queryFn: ({ pageParam }) =>
+      productService.getProducts({
+        page: pageParam,
         limit: 10,
         status: selectedFilter === 'all' ? undefined : selectedFilter,
       }),
-    {
-      onSuccess: () => {
-        // console.log('success');
-      },
-      onError: (err) => {
-        console.error('Failed to load products:', err);
-      },
+
+    initialPageParam: 1,
+
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.page + 1 : undefined;
     },
-    [page, selectedFilter, keyword],
-  );
-  // 数据加载完毕之后才更新数据
-  useEffect(() => {
-    if (page === 1 && Array.isArray(data?.data)) {
-      setAllProducts(data?.data);
-    } else
-      setAllProducts((prev) => {
-        const existingIds = new Set(prev.map((p) => p.id));
-        const newItems = (data?.data || []).filter((p) => !existingIds.has(p.id));
-        return [...prev, ...newItems];
-      });
-  }, [data?.data, page]);
-
-  const hasMore = data?.hasMore || false;
-
-  const handleFilterChange = (filter: ProductStatus | 'all') => {
-    if (selectedFilter !== filter) {
-      setSelectedFilter(filter);
-      setPage(1);
-      setAllProducts([]);
-    }
-  };
-
-  const handleLoadMore = () => {
-    if (!loading && hasMore) {
-      setPage((prev) => prev + 1);
-    }
-  };
-  const onRefresh = async () => {
-    setRefreshing(true);
-    try {
-      if (page === 1) {
-        await refetch();
-      } else {
-        setPage(1);
-      }
-    } catch (error) {
-      console.error('刷新失败:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  };
+  });
+  const allProducts = productData?.pages.flatMap((page) => page.data) ?? [];
 
   const renderHeader = () => (
     <View style={styles.headerSection}>
@@ -105,7 +63,7 @@ export default function Search_Page() {
           <TouchableOpacity
             key={filter.value}
             style={[styles.filterChip]}
-            onPress={() => handleFilterChange(filter.value)}
+            onPress={() => setSelectedFilter(filter.value)}
           >
             <Text
               style={[
@@ -125,22 +83,12 @@ export default function Search_Page() {
       return (
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>加载失败</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryButtonText}>重试</Text>
           </TouchableOpacity>
         </View>
       );
     }
-
-    if (loading) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size='large' color={theme.colors.text_default} />
-          <Text style={styles.loadingText}>加载中...</Text>
-        </View>
-      );
-    }
-
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.emptyText}>暂无商品</Text>
@@ -171,7 +119,11 @@ export default function Search_Page() {
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={true}
-        onEndReached={handleLoadMore}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        }}
         onEndReachedThreshold={0.2}
         columnWrapperStyle={styles.rowWrapper}
         contentContainerStyle={[styles.listContent, allProducts.length === 0 && { flex: 1 }]}
@@ -187,9 +139,17 @@ export default function Search_Page() {
             />
           </View>
         )}
-        ListEmptyComponent={renderEmptyComponent}
+        ListEmptyComponent={
+          isPending ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size='large' color={theme.colors.text_default} />
+            </View>
+          ) : (
+            renderEmptyComponent()
+          )
+        }
         ListFooterComponent={
-          loading && allProducts.length > 0 ? (
+          isFetchingNextPage ? (
             <View style={styles.loadMoreContainer}>
               <ActivityIndicator size='small' color={theme.colors.text_default} />
             </View>
@@ -199,8 +159,8 @@ export default function Search_Page() {
         }
         refreshControl={
           <RefreshControl
-            refreshing={refreshing} // 绑定状态
-            onRefresh={onRefresh} // 绑定下拉触发的事件
+            refreshing={isRefetching} // 绑定状态
+            onRefresh={refetch} // 绑定下拉触发的事件
             colors={[theme.colors.selected]} // Android 小圈圈的颜色（支持传入多个交替变色）
             tintColor={theme.colors.selected} // iOS 小圈圈的颜色
             title={'加载中...'} // iOS 特有的下拉提示文字

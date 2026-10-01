@@ -97,51 +97,87 @@ rentalsRouter.post(
   }),
 );
 
-// 获取当前用户作为租借者的记录
+// 获取当前用户作为租借者的记录（分页）
 rentalsRouter.get(
   '/renter',
   authMiddleware,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const rentals = await prisma.rentalRecord.findMany({
-      where: { renterId: req.user!.userId },
-      include: {
-        product: true,
-        owner: {
-          select: {
-            id: true,
-            nickname: true,
-            avatar: true,
+    const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
+    const limit = Math.min(100, parseInt(String(req.query.limit || '10')) || 10);
+    const status = req.query.status as string | undefined;
+    const userId = req.user!.userId;
+
+    const where: any = { renterId: userId };
+    if (status) where.status = status;
+
+    const [rentals, total] = await Promise.all([
+      prisma.rentalRecord.findMany({
+        where,
+        include: {
+          product: true,
+          owner: {
+            select: {
+              id: true,
+              nickname: true,
+              avatar: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.rentalRecord.count({ where }),
+    ]);
 
-    res.json(rentals);
+    res.json({
+      data: rentals,
+      total,
+      page,
+      hasMore: page * limit < total,
+    });
   }),
 );
 
-// 获取当前用户作为出租者的记录
+// 获取当前用户作为出租者的记录（分页）
 rentalsRouter.get(
   '/owner',
   authMiddleware,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const rentals = await prisma.rentalRecord.findMany({
-      where: { ownerId: req.user!.userId },
-      include: {
-        product: true,
-        renter: {
-          select: {
-            id: true,
-            nickname: true,
-            avatar: true,
+    const page = Math.max(1, parseInt(String(req.query.page || '1')) || 1);
+    const limit = Math.min(100, parseInt(String(req.query.limit || '10')) || 10);
+    const status = req.query.status as string | undefined;
+    const userId = req.user!.userId;
+
+    const where: any = { ownerId: userId };
+    if (status) where.status = status;
+
+    const [rentals, total] = await Promise.all([
+      prisma.rentalRecord.findMany({
+        where,
+        include: {
+          product: true,
+          renter: {
+            select: {
+              id: true,
+              nickname: true,
+              avatar: true,
+            },
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.rentalRecord.count({ where }),
+    ]);
 
-    res.json(rentals);
+    res.json({
+      data: rentals,
+      total,
+      page,
+      hasMore: page * limit < total,
+    });
   }),
 );
 

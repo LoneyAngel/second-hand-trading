@@ -1,5 +1,11 @@
 import request from '../utils/axios';
-import type { RentalRecord, CreateRentalData, UpdateRentalStatusData } from '../types';
+import type {
+  RentalRecord,
+  CreateRentalData,
+  UpdateRentalStatusData,
+  ProductListParams,
+  RentalListResponse,
+} from '../types';
 
 export const rentalsApi = {
   /**
@@ -12,15 +18,15 @@ export const rentalsApi = {
   /**
    * 获取当前用户作为租借者的记录
    */
-  async getRenterRentals(): Promise<RentalRecord[]> {
-    return request.get('/rentals/renter');
+  async getRenterRentals(params?: ProductListParams): Promise<RentalListResponse> {
+    return request.get('/rentals/renter', { params });
   },
 
   /**
    * 获取当前用户作为出租者的记录
    */
-  async getOwnerRentals(): Promise<RentalRecord[]> {
-    return request.get('/rentals/owner');
+  async getOwnerRentals(params?: ProductListParams): Promise<RentalListResponse> {
+    return request.get('/rentals/owner', { params });
   },
 
   /**

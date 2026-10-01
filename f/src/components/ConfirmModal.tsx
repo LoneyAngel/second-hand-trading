@@ -9,12 +9,14 @@ import {
 import { theme } from 'theme';
 
 export type ConfirmType = 'default' | 'primary' | 'danger';
+export type ConfirmMode = 'confirm' | 'alert';
 
 export interface ConfirmModalProps {
   visible: boolean;
   title?: string;
   message?: string;
   type?: ConfirmType;
+  mode?: ConfirmMode;
   confirmText?: string;
   cancelText?: string;
   onConfirm: () => void;
@@ -26,6 +28,7 @@ export default function ConfirmModal({
   title = '提示',
   message = '',
   type = 'primary',
+  mode = 'confirm',
   confirmText = '确定',
   cancelText = '取消',
   onConfirm,
@@ -39,6 +42,8 @@ export default function ConfirmModal({
     onCancel(); // 先关闭弹窗
     confirmRef.current?.();
   };
+
+  const isAlert = mode === 'alert';
 
   return (
     <Modal
@@ -55,10 +60,12 @@ export default function ConfirmModal({
         <TouchableOpacity style={styles.content} activeOpacity={1}>
           <Text style={styles.title}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.btnCancel} onPress={onCancel}>
-              <Text style={styles.btnCancelText}>{cancelText}</Text>
-            </TouchableOpacity>
+          <View style={[styles.actions, isAlert && styles.actionsSingle]}>
+            {!isAlert && (
+              <TouchableOpacity style={styles.btnCancel} onPress={onCancel}>
+                <Text style={styles.btnCancelText}>{cancelText}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[
                 styles.btnConfirm,
@@ -108,6 +115,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     marginTop: 8,
+  },
+  actionsSingle: {
+    gap: 0,
   },
   btnCancel: {
     flex: 1,

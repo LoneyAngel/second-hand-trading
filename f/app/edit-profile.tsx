@@ -17,7 +17,7 @@ import AntDesign from '@expo/vector-icons/AntDesign';
 import { useAuth } from '../src/hooks/useAuth';
 
 export default function EditProfilePage() {
-  const { user, updateUser, isLoading } = useAuth();
+  const { user, updateUser } = useAuth();
   const [nickname, setNickname] = useState(user?.nickname || '');
   const [avatar, setAvatar] = useState(user?.avatar || '');
   const [isSaving, setIsSaving] = useState(false);

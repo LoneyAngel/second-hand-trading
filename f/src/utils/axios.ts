@@ -27,11 +27,11 @@ interface RetryConfig extends InternalAxiosRequestConfig {
 
 class Request {
   private instance: AxiosInstance;
-  private baseURL = 'http://10.107.173.163:3001/api';
+  private baseURL = 'http://10.178.65.163:3001/api';
 
   private timeout = 10000;
   private isRefreshing = false; // 锁：是否正在刷新 Token
-  private retryQueue: ((token: string) => void)[] = []; // 队列：暂存挂起的请求
+  private retryQueue: { resolve: (token: string) => void; reject: (err: any) => void }[] = []; // 队列：暂存挂起的请求
 
   constructor() {
     // 创建 axios 实例
@@ -46,15 +46,21 @@ class Request {
     // 初始化拦截器
     this.setupInterceptors();
   }
-  // 🚀 向队列中添加挂起请求的方法
-  private addRequestToQueue(callback: (token: string) => void) {
-    this.retryQueue.push(callback);
+  // 向队列中添加挂起请求的方法
+  private addRequestToQueue(resolve: (token: string) => void, reject: (err: any) => void) {
+    this.retryQueue.push({ resolve, reject });
   }
 
-  // 🚀 刷新成功后，批量解冻并重新执行队列中的请求
+  // 刷新成功后，批量解冻并重新执行队列中的请求
   private resolveQueue(token: string) {
-    this.retryQueue.forEach((callback) => callback(token));
+    this.retryQueue.forEach(({ resolve }) => resolve(token));
     this.retryQueue = []; // 清空队列
+  }
+
+  // 刷新失败时，批量 reject 队列中所有挂起的请求
+  private rejectQueue(err: any) {
+    this.retryQueue.forEach(({ reject }) => reject(err));
+    this.retryQueue = [];
   }
 
   private setupInterceptors() {
@@ -76,7 +82,7 @@ class Request {
       async (error: AxiosError) => {
         const originalRequest = error.config as RetryConfig;
 
-        // 🚨 安全哨兵 A：刷新接口本身报错，立刻斩断
+        // 1：刷新接口本身报错，立刻斩断
         if (originalRequest?.url?.includes('/auth/refresh')) {
           console.warn('🛑 Refresh Token 本身失效，清理并登出');
           this.isRefreshing = true;
@@ -85,32 +91,38 @@ class Request {
           return Promise.reject(error);
         }
 
-        // 🚨 安全哨兵 B：处理普通接口 401
+        // 2：处理普通接口 401
         if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
-          // 🔥 【核心改动】：如果当前已经有请求在刷新 Token 了
+          // 【核心改动】：如果当前已经有请求在刷新 Token 了
           if (this.isRefreshing) {
             console.log(`⏳ 发现并发 401 请求 [${originalRequest.url}]，将其冷冻放入重试队列...`);
 
-            // 返回一个未决议的 Promise，让这个请求“卡”在这里，不报错也不往下走
-            return new Promise((resolve) => {
-              this.addRequestToQueue((token: string) => {
-                // 当这个回调被执行时，换上最新 Token，重新发起请求，并 resolve 掉
-                if (originalRequest.headers) {
-                  originalRequest.headers.Authorization = `Bearer ${token}`;
-                }
-                resolve(this.instance(originalRequest));
-              });
+            // 返回一个未决议的 Promise，让这个请求”卡”在这里，等待刷新结果
+            return new Promise((resolve, reject) => {
+              this.addRequestToQueue(
+                (token: string) => {
+                  // 刷新成功：换上新 Token 重发请求
+                  if (originalRequest.headers) {
+                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                  }
+                  resolve(this.instance(originalRequest));
+                },
+                (err: any) => {
+                  // 刷新失败：直接 reject，避免请求一直 pending
+                  reject(err);
+                },
+              );
             });
           }
 
           // ----------------------------------------------------
-          // 🔓 第一个冲进来的 401 请求，负责去冲锋阵地刷新 Token
+          //  第一个 401 请求，尝试刷新 Token
           // ----------------------------------------------------
           originalRequest._retry = true;
           this.isRefreshing = true;
 
           try {
-            console.log('🔄 [大管家] 开始执行无感刷新机制...');
+            console.log(' 开始执行无感刷新机制...');
             const refreshToken = await authService.getRefreshToken();
 
             if (!refreshToken) throw new Error('本地无合法的 Refresh Token');
@@ -119,8 +131,8 @@ class Request {
             const response = await authService.refreshToken(refreshToken);
             const newAccessToken = response.accessToken;
 
-            console.log('✅ 无感刷新成功！释放队列中所有挂起的并发请求...');
-            // 🚀 一键复活：通知队列里所有挂起的请求，拿着新 Token 出发！
+            console.log(' 无感刷新成功！释放队列中所有挂起的并发请求...');
+            //  一键复活：通知队列里所有挂起的请求，拿着新 Token 出发！
             this.resolveQueue(newAccessToken);
 
             // 自身也换上新 Token 重新发送
@@ -133,8 +145,9 @@ class Request {
           } catch (refreshError: any) {
             console.error('❌ 凭证彻底过期或无感刷新彻底挂掉:', refreshError.message);
 
-            this.isRefreshing = true;
-            this.retryQueue = []; // 清空队列，防止后续无谓的重试
+            // 刷新失败：reject 队列中所有挂起的请求，释放锁
+            this.rejectQueue(refreshError);
+            this.isRefreshing = false;
             eventBus.emit(AuthEvents.LOGOUT);
 
             return Promise.reject(refreshError);
@@ -177,31 +190,39 @@ class Request {
   }
 
   // ==========================================
-  // 💡 外部业务调用 API 映射（支持泛型透传）
+  // 外部业务调用 API 映射（支持泛型透传）
   // ==========================================
 
-  public get<T = any>(url: string, config?: RequestConfig): Promise<T> {
+  public get<T = any>(url: string, config?: RequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.get(url, config);
   }
 
-  public post<T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> {
+  public post<T = any>(url: string, data?: any, config?: RequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.post(url, data, config);
   }
 
-  public put<T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> {
+  public put<T = any>(url: string, data?: any, config?: RequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.put(url, data, config);
   }
 
-  public patch<T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> {
+  public patch<T = any>(
+    url: string,
+    data?: any,
+    config?: RequestConfig,
+  ): Promise<AxiosResponse<T>> {
     return this.instance.patch(url, data, config);
   }
 
-  public delete<T = any>(url: string, config?: RequestConfig): Promise<T> {
+  public delete<T = any>(url: string, config?: RequestConfig): Promise<AxiosResponse<T>> {
     return this.instance.delete(url, config);
   }
 
-  // 校园网二手平台高频使用的文件/图片上传方法
-  public upload<T = any>(url: string, formData: FormData, config?: RequestConfig): Promise<T> {
+  // 文件/图片上传方法
+  public upload<T = any>(
+    url: string,
+    formData: FormData,
+    config?: RequestConfig,
+  ): Promise<AxiosResponse<T>> {
     return this.instance.post(url, formData, {
       ...config,
       headers: {

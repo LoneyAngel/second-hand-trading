@@ -14,7 +14,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { theme } from '../../theme';
-import { useQuery } from '../../src/hooks/useQuery';
+import { useQuery } from '@tanstack/react-query';
 import { messageService } from '../../src/services';
 import type { Conversation } from '../../src/types';
 import { getSocket } from '../../src/utils/socket';
@@ -22,6 +22,7 @@ import type { Socket } from 'socket.io-client';
 import { useAuth } from '~/hooks';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useDebouncedPress } from '~/hooks/useDebouncedPress';
+import formatTime from '~/utils/format';
 export default function MessagesPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const socketRef = useRef<Socket | null>(null);
@@ -32,9 +33,13 @@ export default function MessagesPage() {
 
   const {
     data: conversations,
-    loading,
+    isPending: loading,
     refetch,
-  } = useQuery(() => messageService.getConversations().then((res) => res.data));
+  } = useQuery({
+    queryKey: ['conversations'],
+    queryFn: () => messageService.getConversations().then((res) => res.data),
+    enabled: isAuthenticated,
+  });
 
   // 页面聚焦时刷新 + 连接 socket 监听会话更新
   useFocusEffect(
@@ -111,21 +116,6 @@ export default function MessagesPage() {
     setTimeout(() => {
       pressLockRef.current = false;
     }, 800);
-  };
-
-  const formatTime = (timeStr: string) => {
-    const date = new Date(timeStr);
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    if (isToday) {
-      return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-    }
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays < 7) {
-      const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-      return weekdays[date.getDay()];
-    }
-    return `${date.getMonth() + 1}/${date.getDate()}`;
   };
 
   const renderItem = ({ item }: { item: Conversation }) => (

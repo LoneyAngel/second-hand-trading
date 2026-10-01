@@ -14,13 +14,13 @@ import { theme } from '../theme';
 import LoveButton from '~/components/LoveButton';
 import { FontAwesome } from '@expo/vector-icons';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { useQuery } from '../src/hooks';
 import { productService } from '../src/services';
 import { useAuth } from '../src/hooks';
 import { useEffect, useState } from 'react';
 import type { PriceUnit, Review } from '../src/types';
 import ReviewCard from '~/components/ReviewCard';
 import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 // 价格单位配置
 const PRICE_UNITS: { value: PriceUnit; label: string }[] = [
@@ -30,18 +30,21 @@ const PRICE_UNITS: { value: PriceUnit; label: string }[] = [
 ];
 
 export default function Detail_Page() {
+  const queryCient = useQueryClient();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { isAuthenticated, user } = useAuth();
   const [isLike, setIsLike] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
 
   const {
     data: product,
-    loading,
+    isPending: loading,
     error,
     refetch,
-  } = useQuery(() => productService.getProduct(id, user?.id), { enabled: !!id });
+  } = useQuery({
+    queryKey: ['product', id],
+    queryFn: () => productService.getProduct(id, user?.id),
+  });
   const isMe = product?.user.id === user?.id;
 
   // 评论数据
@@ -87,7 +90,7 @@ export default function Detail_Page() {
   const goToUserProfile = useDebouncedPress(() => {
     router.push({
       pathname: '/public-personal',
-      params: { userId: product.user.id },
+      params: { userId: product?.user.id },
     });
   });
 
@@ -106,33 +109,64 @@ export default function Detail_Page() {
     }
     router.push({
       pathname: '/rent',
-      params: { id: product.id },
+      params: { id: product?.id },
     });
   };
   const handleFavorited = async () => {
-    if (isAuthenticated) {
-      setIsLike((prev) => !prev);
-      await productService.toggleFavorite(product.id);
-    } else Alert.alert('登陆后才可以收藏哦');
+    if (!isAuthenticated) {
+      Alert.alert('提示', '登陆后才可以收藏哦');
+      return;
+    }
+    await toggleFavoriteMutation.mutateAsync(product!.id);
   };
+  const toggleFollowMutation = useMutation({
+    mutationFn: productService.toggleFollow,
+    onMutate: async (userId: string) => {
+      // 乐观更新 UI 状态
+      const prev = isFollowing;
+      setIsFollowing(!prev);
+      return { prev };
+    },
+    onError: (_err, _userId, context) => {
+      // 失败回滚
+      if (context?.prev !== undefined) {
+        setIsFollowing(context.prev);
+      }
+    },
+    onSuccess: () => {
+      queryCient.invalidateQueries({
+        queryKey: ['user', 'followingCount'],
+      });
+    },
+  });
 
+  const toggleFavoriteMutation = useMutation({
+    mutationFn: (productId: string) => productService.toggleFavorite(productId),
+    onMutate: async () => {
+      const prev = isLike;
+      setIsLike(!prev);
+      return { prev };
+    },
+    onError: (_err, _productId, context) => {
+      if (context?.prev !== undefined) {
+        setIsLike(context.prev);
+      }
+    },
+    onSuccess: () => {
+      queryCient.invalidateQueries({
+        queryKey: ['favorites'],
+      });
+      queryCient.invalidateQueries({
+        queryKey: ['product', id],
+      });
+    },
+  });
   const handleFollow = async () => {
     if (!isAuthenticated) {
       Alert.alert('提示', '请先登录');
       return;
     }
-    if (followLoading) return;
-
-    setFollowLoading(true);
-    try {
-      setIsFollowing((prev) => !prev);
-      await productService.toggleFollow(product.user.id);
-    } catch (error) {
-      setIsFollowing((prev) => !prev);
-      Alert.alert('提示', '操作失败');
-    } finally {
-      setFollowLoading(false);
-    }
+    await toggleFollowMutation.mutateAsync(product!.user.id);
   };
   // action
 
@@ -148,13 +182,13 @@ export default function Detail_Page() {
     router.push({
       pathname: '/chat',
       params: {
-        userId: product.user.id,
-        userName: product.user.nickname || '用户',
-        userAvatar: product.user.avatar || '',
-        productId: product.id,
-        productTitle: product.title,
-        productImage: product.images?.[0] || '',
-        productPrice: String(product.price),
+        userId: product?.user.id,
+        userName: product?.user.nickname || '用户',
+        userAvatar: product?.user.avatar || '',
+        productId: product?.id,
+        productTitle: product?.title,
+        productImage: product?.images?.[0] || '',
+        productPrice: String(product?.price),
       },
     });
   };
@@ -175,7 +209,7 @@ export default function Detail_Page() {
       <SafeAreaView style={styles.loadingContainer} edges={['top']}>
         <View style={styles.loadingContent}>
           <Text style={styles.errorText}>商品不存在或加载失败</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryButtonText}>重试</Text>
           </TouchableOpacity>
         </View>
@@ -246,10 +280,7 @@ export default function Detail_Page() {
           {/* 用户信息 */}
           <View style={styles.descriptionContainer}>
             <Text style={styles.sectionTitle}>出租人</Text>
-            <TouchableOpacity
-              style={styles.userInfo}
-              onPress={goToUserProfile}
-            >
+            <TouchableOpacity style={styles.userInfo} onPress={goToUserProfile}>
               <View style={styles.userAvatar}>
                 {product.user.avatar ? (
                   <Image source={{ uri: product.user.avatar }} style={styles.avatarImage} />
@@ -265,9 +296,9 @@ export default function Detail_Page() {
                 <TouchableOpacity
                   style={[styles.followButton, isFollowing && styles.followButtonActive]}
                   onPress={handleFollow}
-                  disabled={followLoading}
+                  disabled={toggleFollowMutation.isPending}
                 >
-                  {followLoading ? (
+                  {toggleFollowMutation.isPending ? (
                     <ActivityIndicator
                       size='small'
                       color={isFollowing ? 'white' : theme.colors.selected}
@@ -329,10 +360,10 @@ export default function Detail_Page() {
               <Text style={styles.specLabel}>分类</Text>
               <Text style={styles.specValue}>{product.category.name}</Text>
             </View>
-            <View style={styles.specRow}>
+            {/* <View style={styles.specRow}>
               <Text style={styles.specLabel}>成色</Text>
               <Text style={styles.specValue}>9成新</Text>
-            </View>
+            </View> */}
           </View>
         </View>
       </ScrollView>

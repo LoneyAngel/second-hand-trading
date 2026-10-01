@@ -10,17 +10,11 @@ export interface BeautifyDescriptionParams {
   priceUnit?: PriceUnit;
 }
 
-export interface BeautifyDescriptionResponse {
-  beautifiedDescription: string;
-}
-
 export const aiApi = {
   /**
    * AI 美化商品描述
    */
-  async beautifyDescription(
-    params: BeautifyDescriptionParams,
-  ): Promise<BeautifyDescriptionResponse> {
+  async beautifyDescription(params: BeautifyDescriptionParams): Promise<{ data: string }> {
     return request.post('/ai/beautify-description', params, {
       timeout: 15000, // AI 接口给 15 秒超时
     });

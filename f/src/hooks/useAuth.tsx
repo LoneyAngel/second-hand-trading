@@ -1,7 +1,6 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { authService } from '../services';
 import type { User, LoginData, RegisterData, UpdateUserData } from '../types';
-import * as SecureStore from 'expo-secure-store';
 import { eventBus, AuthEvents } from '../utils/eventBus';
 import { router } from 'expo-router';
 
@@ -25,11 +24,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 初始化时从存储中恢复用户信息
   useEffect(() => {
     const init = async () => {
-      console.log('token：');
-      console.log(
-        await SecureStore.getItemAsync('access_token'),
-        await SecureStore.getItemAsync('refresh_token'),
-      );
+      // console.log('token：');
+      // console.log(
+      //   await SecureStore.getItemAsync('access_token'),
+      //   await SecureStore.getItemAsync('refresh_token'),
+      // );
       await loadStoredUser();
     };
     init();

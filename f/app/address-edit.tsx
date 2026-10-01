@@ -20,8 +20,10 @@ import type { POI, Coordinates } from 'expo-gaode-map';
 import { theme } from '../theme';
 import { addressService } from '../src/services';
 import type { CreateAddressData } from '../src/types';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 export default function AddressEditPage() {
+  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ id?: string }>();
   const isEdit = !!params.id;
 
@@ -86,45 +88,48 @@ export default function AddressEditPage() {
   }, []);
 
   // 关键词搜索
-  const handleSearchChange = useCallback((text: string) => {
-    setSearchKeyword(text);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
+  const handleSearchChange = useCallback(
+    (text: string) => {
+      setSearchKeyword(text);
+      if (searchTimer.current) clearTimeout(searchTimer.current);
 
-    // 清空关键词时回到周边列表
-    if (!text.trim()) {
-      if (currentLocation) {
-        setIsNearbyMode(true);
-        loadNearbyPOIs();
-      } else {
-        setSearchResults([]);
+      // 清空关键词时回到周边列表
+      if (!text.trim()) {
+        if (currentLocation) {
+          setIsNearbyMode(true);
+          loadNearbyPOIs();
+        } else {
+          setSearchResults([]);
+        }
+        return;
       }
-      return;
-    }
 
-    // 防抖关键词搜索
-    searchTimer.current = setTimeout(async () => {
-      setSearchLoading(true);
-      setIsNearbyMode(false);
-      try {
-        const result = await searchPOI({
-          keyword: text,
-          pageSize: 20,
-          pageNum: 1,
-          // 如果有定位结果，按距离排序
-          ...(currentLocation && {
-            center: currentLocation,
-            sortByDistance: true,
-          }),
-        });
-        setSearchResults(result.pois || []);
-      } catch (err) {
-        console.error('搜索失败:', err);
-        setSearchResults([]);
-      } finally {
-        setSearchLoading(false);
-      }
-    }, 300);
-  }, [currentLocation, loadNearbyPOIs]);
+      // 防抖关键词搜索
+      searchTimer.current = setTimeout(async () => {
+        setSearchLoading(true);
+        setIsNearbyMode(false);
+        try {
+          const result = await searchPOI({
+            keyword: text,
+            pageSize: 20,
+            pageNum: 1,
+            // 如果有定位结果，按距离排序
+            ...(currentLocation && {
+              center: currentLocation,
+              sortByDistance: true,
+            }),
+          });
+          setSearchResults(result.pois || []);
+        } catch (err) {
+          console.error('搜索失败:', err);
+          setSearchResults([]);
+        } finally {
+          setSearchLoading(false);
+        }
+      }, 300);
+    },
+    [currentLocation, loadNearbyPOIs],
+  );
 
   // 进入搜索模式
   const enterSearchMode = () => {
@@ -162,9 +167,10 @@ export default function AddressEditPage() {
       setRegion(regionText);
     }
     // 详细地址：POI 名称 + 地址（去掉重复前缀）
-    const detail = poi.name && poi.address && poi.address !== poi.name
-      ? `${poi.name} ${poi.address}`
-      : poi.name || poi.address || '';
+    const detail =
+      poi.name && poi.address && poi.address !== poi.name
+        ? `${poi.name} ${poi.address}`
+        : poi.name || poi.address || '';
     setFormData((prev) => ({ ...prev, detailAddress: detail }));
     exitSearchMode();
   };
@@ -192,6 +198,19 @@ export default function AddressEditPage() {
     }
     return true;
   };
+  const updateAddressMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: any }) =>
+      addressService.updateAddress(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['addresses'] });
+    },
+  });
+  const createAddressMutation = useMutation({
+    mutationFn: addressService.createAddress,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['addresses'] });
+    },
+  });
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
@@ -203,9 +222,10 @@ export default function AddressEditPage() {
         detailAddress: fullAddress,
       };
       if (isEdit && params.id) {
-        await addressService.updateAddress(params.id, payload);
+        const id = params.id;
+        await updateAddressMutation.mutateAsync({ id, payload });
       } else {
-        await addressService.createAddress(payload);
+        await createAddressMutation.mutateAsync(payload);
       }
       Alert.alert('成功', isEdit ? '地址修改成功' : '地址添加成功', [
         { text: '确定', onPress: () => router.back() },
@@ -237,7 +257,9 @@ export default function AddressEditPage() {
         <Feather name='map-pin' size={16} color={theme.colors.text_gray} />
       </View>
       <View style={styles.searchItemContent}>
-        <Text style={styles.searchItemTitle} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.searchItemTitle} numberOfLines={1}>
+          {item.name}
+        </Text>
         <Text style={styles.searchItemAddress} numberOfLines={1}>
           {item.address || '暂无详细地址'}
           {item.distance ? ` · ${formatDistance(item.distance)}` : ''}
@@ -271,11 +293,13 @@ export default function AddressEditPage() {
                 autoFocus
               />
               {searchKeyword ? (
-                <TouchableOpacity onPress={() => {
-                  setSearchKeyword('');
-                  setSearchResults([]);
-                  inputRef.current?.focus();
-                }}>
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchKeyword('');
+                    setSearchResults([]);
+                    inputRef.current?.focus();
+                  }}
+                >
                   <AntDesign name='close-circle' size={16} color={theme.colors.text_gray} />
                 </TouchableOpacity>
               ) : null}
@@ -341,7 +365,11 @@ export default function AddressEditPage() {
         <>
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             {/* 搜索栏（点击进入搜索模式） */}
-            <TouchableOpacity style={styles.searchBar} onPress={enterSearchMode} activeOpacity={0.7}>
+            <TouchableOpacity
+              style={styles.searchBar}
+              onPress={enterSearchMode}
+              activeOpacity={0.7}
+            >
               <Feather name='search' size={16} color={theme.colors.text_gray} />
               <Text style={styles.searchPlaceholder}>搜索地址，更快填写</Text>
             </TouchableOpacity>
@@ -350,7 +378,9 @@ export default function AddressEditPage() {
             <TouchableOpacity style={styles.formRow} onPress={enterSearchMode}>
               <View style={styles.rowLeft}>
                 <Text style={styles.required}>*</Text>
-                <Text style={[styles.rowText, region === '请选择省/市/区' && styles.rowTextPlaceholder]}>
+                <Text
+                  style={[styles.rowText, region === '请选择省/市/区' && styles.rowTextPlaceholder]}
+                >
                   {region}
                 </Text>
               </View>

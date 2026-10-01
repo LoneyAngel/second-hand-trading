@@ -69,6 +69,7 @@ class ProductService {
   async getAdviseProducts(): Promise<AdviseProductsResponse> {
     return productsApi.getAdviseProducts();
   }
+  // 收藏
   async toggleFavorite(productId: string): Promise<void> {
     await productsApi.toggleFavorite(productId);
   }
@@ -81,13 +82,14 @@ class ProductService {
     page?: number;
     limit?: number;
   }): Promise<ProductListResponse> {
+    console.log('params', params);
     return productsApi.getMyProductsPaginated(params);
   }
 
   /**
    * 获取我的收藏数量
    */
-  async getFavoritesCount(): Promise<{ count: number }> {
+  async getFavoritesCount(): Promise<{ data: number }> {
     return productsApi.getFavoritesCount();
   }
   /**
@@ -110,7 +112,7 @@ class ProductService {
   /**
    * 获取我的浏览记录数量
    */
-  async getFootprintsCount(): Promise<{ count: number }> {
+  async getFootprintsCount(): Promise<{ data: number }> {
     return productsApi.getFootprintsCount();
   }
 
@@ -152,7 +154,7 @@ class ProductService {
   /**
    * 获取关注数量
    */
-  async getFollowingCount(): Promise<{ count: number }> {
+  async getFollowingCount(): Promise<{ data: number }> {
     return productsApi.getFollowingCount();
   }
 

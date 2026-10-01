@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { theme } from '../theme';
 import AntDesign from '@expo/vector-icons/AntDesign';
-import { useQuery } from '../src/hooks/useQuery';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { productService } from '../src/services';
 import Card from '../src/components/ShopCard';
 import { useAuth } from '../src/hooks/useAuth';
@@ -22,6 +22,7 @@ import { useState } from 'react';
 const THEME_CYAN = '#0D9488';
 
 export default function PublicPersonalPage() {
+  const queryCient = useQueryClient();
   const { userId } = useLocalSearchParams<{ userId: string }>();
   const { isAuthenticated } = useAuth();
   const [isFollowing, setIsFollowing] = useState(false);
@@ -29,20 +30,44 @@ export default function PublicPersonalPage() {
 
   const {
     data: userData,
-    loading: userLoading,
+    isPending: userLoading,
     error: userError,
     refetch: refetchUser,
-  } = useQuery(() => productService.getUserPublic(userId as string), {
+  } = useQuery({
+    queryKey: ['user', 'public', userId],
+    queryFn: () => productService.getUserPublic(userId as string),
     enabled: !!userId,
   });
 
   const {
     data: productsData,
-    loading: productsLoading,
+    isPending: productsLoading,
     error: productsError,
     refetch: refetchProducts,
-  } = useQuery(() => productService.getUserProducts(userId as string, { limit: 20 }), {
+  } = useQuery({
+    queryKey: ['user', 'products', userId],
+    queryFn: () => productService.getUserProducts(userId as string, { limit: 20 }),
     enabled: !!userId,
+  });
+  const toggleFollowMutation = useMutation({
+    mutationFn: productService.toggleFollow,
+    onMutate: async (userId: string) => {
+      // 乐观更新 UI 状态
+      const prev = isFollowing;
+      setIsFollowing(!prev);
+      return { prev };
+    },
+    onError: (_err, _userId, context) => {
+      // 失败回滚
+      if (context?.prev !== undefined) {
+        setIsFollowing(context.prev);
+      }
+    },
+    onSuccess: () => {
+      queryCient.invalidateQueries({
+        queryKey: ['user', 'followingCount'],
+      });
+    },
   });
 
   const products = productsData?.data || [];
@@ -57,7 +82,7 @@ export default function PublicPersonalPage() {
     setFollowLoading(true);
     try {
       setIsFollowing((prev) => !prev);
-      await productService.toggleFollow(userId as string);
+      await toggleFollowMutation.mutateAsync(userId as string);
     } catch (error) {
       setIsFollowing((prev) => !prev);
       Alert.alert('提示', '操作失败');
@@ -97,7 +122,7 @@ export default function PublicPersonalPage() {
         </View>
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>加载失败</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetchUser}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetchUser()}>
             <Text style={styles.retryButtonText}>重试</Text>
           </TouchableOpacity>
         </View>

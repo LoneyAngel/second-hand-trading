@@ -170,7 +170,7 @@ usersRouter.get(
       where: { followerId: userId },
     });
 
-    res.json({ count });
+    res.json({ data: count });
   }),
 );
 
@@ -213,7 +213,7 @@ usersRouter.get(
       where: { followingId: userId },
     });
 
-    res.json({ count });
+    res.json({ data: count });
   }),
 );
 
@@ -311,7 +311,7 @@ usersRouter.get(
       where: { followingId: userIdParam },
     });
 
-    res.json({ count });
+    res.json({ data: count });
   }),
 );
 
@@ -325,6 +325,6 @@ usersRouter.get(
       where: { followerId: userIdParam },
     });
 
-    res.json({ count });
+    res.json({ data: count });
   }),
 );

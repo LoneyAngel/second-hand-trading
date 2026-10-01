@@ -15,11 +15,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Entypo from '@expo/vector-icons/Entypo';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../src/hooks/useAuth';
-import { useQuery } from '../../src/hooks/useQuery';
+// import { useQuery } from '../../src/hooks/useQuery';
 import { authService, productService } from '../../src/services';
 import { router } from 'expo-router';
 import { ReactElement } from 'react';
 import { useDebouncedPress } from '../../src/hooks/useDebouncedPress';
+import { useQuery } from '@tanstack/react-query';
 
 const ORDER_TABS: { label: string; icon: ReactElement }[] = [
   {
@@ -33,32 +34,29 @@ export default function Mine_Page() {
   // 初始化个人信息
   const { user, isAuthenticated, refreshUser } = useAuth();
 
-  // 获取用户信息（如果本地有 token 但没有用户信息）
-  const { loading: userLoading, refetch: refetchUser } = useQuery(
-    () => authService.getCurrentUser(),
-    {
-      enabled: isAuthenticated && !user,
-      onSuccess: (data) => {
-        refreshUser();
-      },
-    },
-  );
-
-  // 获取收藏的数量
-  const { data: favoriteCount } = useQuery(() => productService.getFavoritesCount(), {
-    enabled: isAuthenticated,
+  // // 获取用户信息（如果本地有 token 但没有用户信息）
+  // const { loading: userLoading, refetch: refetchUser } = useQuery(
+  //   () => authService.getCurrentUser(),
+  //   {
+  //     enabled: isAuthenticated && !user,
+  //     onSuccess: (data) => {
+  //       refreshUser();
+  //     },
+  //   },
+  // );
+  const { data: favoriteCount, isPending: loadingFavoriteCount } = useQuery({
+    queryKey: ['favorites', 'count'],
+    queryFn: () => productService.getFavoritesCount(),
   });
-
-  // 获取浏览的数量
-  const { data: footprintsCount } = useQuery(() => productService.getFootprintsCount(), {
-    enabled: isAuthenticated,
+  const { data: footprintsCount, isPending: loadingFootprintsCount } = useQuery({
+    queryKey: ['footprints', 'count'],
+    queryFn: () => productService.getFootprintsCount(),
   });
-
-  // 获取关注的数量
-  const { data: followingCount } = useQuery(() => productService.getFollowingCount(), {
-    enabled: isAuthenticated,
+  console.log('footprintsCount', footprintsCount);
+  const { data: followingCount, isPending: loadingFollowingCount } = useQuery({
+    queryKey: ['user', 'followingCount'],
+    queryFn: () => productService.getFollowingCount(),
   });
-  console.log('followingCount', followingCount);
 
   // 防抖跳转
   const goToLogin = useDebouncedPress(() => router.push({ pathname: '/login' }));
@@ -84,14 +82,6 @@ export default function Mine_Page() {
       Alert.alert('提示', '未找到邮件应用，请手动发送邮件至 2670696747@qq.com');
     }
   });
-
-  if (userLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size='large' color={theme.colors.text_default} />
-      </View>
-    );
-  }
 
   if (!isAuthenticated) {
     return (
@@ -196,15 +186,15 @@ export default function Mine_Page() {
         >
           <View style={{ flexDirection: 'row', justifyContent: 'space-around', gap: 10 }}>
             <Pressable style={styles.iconTextButton} onPress={goToFootprints}>
-              <Text style={styles.iconNumber}>{footprintsCount?.count ?? 0}</Text>
+              <Text style={styles.iconNumber}>{footprintsCount?.data ?? 0}</Text>
               <Text style={styles.iconText}>我的浏览</Text>
             </Pressable>
             <Pressable style={styles.iconTextButton} onPress={goToFavorites}>
-              <Text style={styles.iconNumber}>{favoriteCount?.data ? favoriteCount?.data : 0}</Text>
+              <Text style={styles.iconNumber}>{favoriteCount?.data ?? 0}</Text>
               <Text style={styles.iconText}>我的收藏</Text>
             </Pressable>
             <Pressable style={styles.iconTextButton} onPress={goToFollowing}>
-              <Text style={styles.iconNumber}>{followingCount?.count ?? 0}</Text>
+              <Text style={styles.iconNumber}>{followingCount?.data ?? 0}</Text>
               <Text style={styles.iconText}>我的关注</Text>
             </Pressable>
           </View>
@@ -225,7 +215,7 @@ export default function Mine_Page() {
           <Pressable style={styles.textButton} onPress={goToMyProducts}>
             {/* <Feather name='shopping-bag' size={24} color={theme.colors.text_default} /> */}
             <MaterialCommunityIcons name='package-variant-closed-plus' size={24} />
-            <Text style={styles.tabLabel}>我的发布</Text>
+            <Text style={styles.tabLabel}>我的商品</Text>
           </Pressable>
           {ORDER_TABS.map((tab, index) => (
             <Pressable

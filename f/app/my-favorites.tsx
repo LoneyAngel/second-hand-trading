@@ -11,79 +11,48 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { router } from 'expo-router';
-import { useState, useEffect, useCallback } from 'react';
-import { useQuery } from '../src/hooks/useQuery';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { productService } from '../src/services';
-import type { Product } from '../src/types';
 import SimpleProductCard from '../src/components/SmallCard';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 
 export default function MyFavoritesPage() {
-  const [page, setPage] = useState(1);
-  const [refreshing, setRefreshing] = useState(false);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    refetch,
+    isRefetching,
+    isFetchingNextPage,
+    isPending,
+    error,
+  } = useInfiniteQuery({
+    queryKey: ['favorites'],
 
-  const { data, loading, error, refetch } = useQuery(
-    () =>
+    queryFn: ({ pageParam }) =>
       productService.getMyFavoritesProductsPaginated({
-        page: page,
+        page: pageParam,
         limit: 10,
       }),
-    {},
-    [page],
-  );
 
-  useEffect(() => {
-    if (page === 1 && Array.isArray(data?.data)) {
-      setAllProducts(data?.data);
-    } else if (data?.data) {
-      setAllProducts((prev) => {
-        const existingIds = new Set(prev.map((p) => p.id));
-        const newItems = data.data.filter((p) => !existingIds.has(p.id));
-        return [...prev, ...newItems];
-      });
-    }
-  }, [data?.data]);
+    initialPageParam: 1,
 
-  const hasMore = data?.hasMore || false;
-
-  const handleLoadMore = () => {
-    if (!loading && hasMore) {
-      setPage((prev) => prev + 1);
-    }
-  };
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      refetch();
-    } catch (error) {
-      console.error('刷新失败:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
-
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.page + 1 : undefined;
+    },
+  });
+  const favoritesData = data?.pages.flatMap((page) => page.data) ?? [];
   const renderEmptyComponent = () => {
-    if (error && allProducts.length === 0) {
+    if (error) {
       return (
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>加载失败</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryButtonText}>重试</Text>
           </TouchableOpacity>
         </View>
       );
     }
-
-    if (loading && allProducts.length === 0) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size='large' color={theme.colors.text_default} />
-          <Text style={styles.loadingText}>加载中...</Text>
-        </View>
-      );
-    }
-
     return (
       <View style={styles.emptyContainer}>
         <FontAwesome name='heart-o' size={48} color={theme.colors.text_secondary} />
@@ -106,24 +75,36 @@ export default function MyFavoritesPage() {
       </View>
 
       <FlatList
-        data={allProducts}
+        data={favoritesData}
         keyExtractor={(item) => item.id}
         initialNumToRender={8}
         maxToRenderPerBatch={10}
         windowSize={5}
         removeClippedSubviews={true}
-        onEndReached={handleLoadMore}
+        onEndReached={() => {
+          if (hasNextPage && isFetchingNextPage) {
+            fetchNextPage();
+          }
+        }}
         onEndReachedThreshold={0.2}
-        contentContainerStyle={[styles.listContent, allProducts.length === 0 && { flex: 1 }]}
+        contentContainerStyle={[styles.listContent, favoritesData.length === 0 && { flex: 1 }]}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <View style={styles.cardWrapper}>
             <SimpleProductCard product={item} />
           </View>
         )}
-        ListEmptyComponent={renderEmptyComponent}
+        ListEmptyComponent={
+          isPending ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size='large' color={theme.colors.text_default} />
+            </View>
+          ) : (
+            renderEmptyComponent()
+          )
+        }
         ListFooterComponent={
-          loading && allProducts.length > 0 ? (
+          isFetchingNextPage ? (
             <View style={styles.loadMoreContainer}>
               <ActivityIndicator size='small' color={theme.colors.text_default} />
             </View>
@@ -133,8 +114,8 @@ export default function MyFavoritesPage() {
         }
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={isRefetching}
+            onRefresh={refetch}
             colors={[theme.colors.selected]}
             tintColor={theme.colors.selected}
             title='加载中...'

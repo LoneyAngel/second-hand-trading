@@ -14,8 +14,8 @@ const aiProvider = createOpenAI({
   baseURL: env.OPENAI_BASE_URL || undefined,
 });
 
-// AI 模型名（可通过环境变量覆盖，默认 gpt-4o-mini）
-const AI_MODEL = env.OPENAI_MODEL || 'gpt-4o-mini';
+// AI 模型名（可通过环境变量覆盖）
+const AI_MODEL = env.OPENAI_MODEL;
 
 // 美化商品描述参数校验
 const beautifyDescriptionSchema = z.object({
@@ -98,7 +98,7 @@ aiRouter.post(
       // 和项目其他接口风格一致：直接返回数据，外层由 axios 拦截器解包
       console.log('AI 美化成功:', beautified);
       res.json({
-        beautifiedDescription: beautified,
+        data: beautified,
       });
     } catch (error) {
       console.error('AI 生成失败:', error);

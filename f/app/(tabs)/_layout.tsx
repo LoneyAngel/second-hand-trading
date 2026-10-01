@@ -22,7 +22,7 @@ export default function TabLayout() {
           <Pressable
             {...props}
             android_ripple={null}
-            style={({ pressed }) => [
+            style={() => [
               props.style,
               { opacity: 1 }, // 始终保持 100% 不透明度
             ]}

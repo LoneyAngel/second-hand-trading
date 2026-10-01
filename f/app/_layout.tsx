@@ -2,11 +2,12 @@ import { SplashScreen, Stack, router } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '~/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import { View, ActivityIndicator, Alert } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { PortalProvider } from '@gorhom/portal';
 import { useFonts } from 'expo-font';
 import request from '~/utils/axios';
 import SplashAd from './splashAd';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 function RootLayoutNav() {
   const { isLoading, isAuthenticated } = useAuth();
@@ -39,7 +40,7 @@ function RootLayoutNav() {
       try {
         await request.get('/categories', { skipAuth: true });
         if (!cancelled) {
-          Alert.alert('✅ 网络检测', '后端连接成功\n\n说明：网络链路正常，问题出在业务接口');
+          console.log('✅ 网络检测', '后端连接成功\n\n说明：网络链路正常，问题出在业务接口');
         }
       } catch (error: any) {
         if (cancelled) return;
@@ -49,7 +50,7 @@ function RootLayoutNav() {
         const code = error.code || '(无 code)';
         const hasResponse = !!error.response;
         const status = error.response?.status || '(无)';
-        Alert.alert(
+        console.error(
           '❌ 网络检测失败',
           `请求类型：${hasResponse ? '服务器有响应（业务错误）' : '无响应（网络层错误）'}\n\n` +
             `完整URL：${baseURL}${url}\n` +
@@ -167,12 +168,16 @@ function RootLayoutNav() {
   );
 }
 
+const queryClient = new QueryClient();
+
 export default function RootLayout() {
   return (
-    <PortalProvider>
-      <AuthProvider>
-        <RootLayoutNav />
-      </AuthProvider>
-    </PortalProvider>
+    <QueryClientProvider client={queryClient}>
+      <PortalProvider>
+        <AuthProvider>
+          <RootLayoutNav />
+        </AuthProvider>
+      </PortalProvider>
+    </QueryClientProvider>
   );
 }

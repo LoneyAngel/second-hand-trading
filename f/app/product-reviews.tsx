@@ -1,3 +1,4 @@
+// 等待重构
 import {
   View,
   Text,
@@ -16,6 +17,7 @@ import { theme } from '../theme';
 import { productService } from '../src/services';
 import ReviewCard from '../src/components/ReviewCard';
 import type { Review } from '../src/types';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 const FILTER_TABS = [
   { key: 0, label: '全部' },
@@ -27,6 +29,7 @@ const FILTER_TABS = [
 ];
 
 export default function ProductReviewsPage() {
+  const queryClient = useQueryClient();
   const { productId } = useLocalSearchParams<{ productId: string }>();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [total, setTotal] = useState(0);
@@ -39,10 +42,16 @@ export default function ProductReviewsPage() {
   const [hasMore, setHasMore] = useState(true);
   const pageSize = 10;
 
+  const getLatestReviewMutation = useMutation({
+    mutationFn: productService.getLatestReview,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['reviews', productId] });
+    },
+  });
   const loadStats = useCallback(async () => {
     if (!productId) return;
     try {
-      const res = await productService.getLatestReview(productId);
+      const res = await getLatestReviewMutation.mutateAsync(productId);
       setAverageRating(res.averageRating);
       setTotal(res.reviewCount);
       setRatingCounts(res.ratingCounts || {});

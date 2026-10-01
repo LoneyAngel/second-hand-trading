@@ -13,9 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { theme } from '../theme';
-import { useQuery } from '../src/hooks/useQuery';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { rentalService } from '../src/services';
 import type { RentalRecord, RentalStatus } from '../src/types';
+import { formatDate } from '~/utils/format';
 
 const TABS = [
   { key: 'renter', label: '我租到的' },
@@ -44,29 +45,30 @@ export default function MyRentalsPage() {
   const { type } = useLocalSearchParams<{ type?: string }>();
   const [activeTab, setActiveTab] = useState<TabKey>(type === 'owner' ? 'owner' : 'renter');
 
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
   const {
-    data: rentals,
-    loading,
+    data,
+    fetchNextPage,
+    hasNextPage,
     refetch,
-  } = useQuery(
-    () =>
-      activeTab === 'renter' ? rentalService.getRenterRentals() : rentalService.getOwnerRentals(),
-    {
-      enabled: true,
-    },
-    [activeTab],
-  );
+    isRefetching,
+    isFetchingNextPage,
+    isPending,
+    error,
+  } = useInfiniteQuery({
+    queryKey: ['rentals', activeTab],
 
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await refetch();
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
+    queryFn: ({ pageParam }) =>
+      activeTab === 'renter'
+        ? rentalService.getRenterRentals({ page: pageParam, limit: 10 })
+        : rentalService.getOwnerRentals({ page: pageParam, limit: 10 }),
+
+    initialPageParam: 1,
+
+    getNextPageParam: (lastPage) => {
+      return lastPage.hasMore ? lastPage.page + 1 : undefined;
+    },
+  });
+  const rentals = data?.pages.flatMap((page) => page.data) ?? [];
 
   const pressLockRef = useRef(false);
   const goToRentalDetail = (id: string) => {
@@ -79,11 +81,6 @@ export default function MyRentalsPage() {
     setTimeout(() => {
       pressLockRef.current = false;
     }, 800);
-  };
-
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return `${date.getFullYear()}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
   };
 
   const renderItem = ({ item }: { item: RentalRecord }) => (
@@ -135,6 +132,23 @@ export default function MyRentalsPage() {
       </View>
     </TouchableOpacity>
   );
+  const renderEmptyComponent = () => {
+    if (error) {
+      return (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.errorText}>加载失败</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
+            <Text style={styles.retryButtonText}>重试</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.emptyText}>暂无商品</Text>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -165,31 +179,49 @@ export default function MyRentalsPage() {
       </View>
 
       {/* 订单列表 */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size='large' color={theme.colors.selected} />
-        </View>
-      ) : (
-        <FlatList
-          data={rentals || []}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              colors={[theme.colors.selected]}
-            />
+      <FlatList
+        data={rentals}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        initialNumToRender={8}
+        maxToRenderPerBatch={10}
+        windowSize={5}
+        showsVerticalScrollIndicator={false}
+        onEndReached={() => {
+          if (hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
           }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <AntDesign name='inbox' size={48} color={theme.colors.text_secondary} />
-              <Text style={styles.emptyText}>暂无订单</Text>
+        }}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          isPending ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size='large' color={theme.colors.text_default} />
             </View>
-          }
-        />
-      )}
+          ) : (
+            renderEmptyComponent()
+          )
+        }
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.loadMoreContainer}>
+              <ActivityIndicator size='small' color={theme.colors.text_default} />
+            </View>
+          ) : (
+            <View style={{ height: 40 }} />
+          )
+        }
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={refetch}
+            colors={[theme.colors.selected]}
+            tintColor={theme.colors.selected}
+            title='加载中...'
+            titleColor='#999999'
+          />
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -331,12 +363,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  errorText: {
+    color: theme.colors.text_price,
+    fontSize: theme.fontSizes.lg,
+    lineHeight: theme.fontSizes.lg + 4,
+    fontWeight: '500',
+    marginBottom: 20,
+  },
+  retryButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    backgroundColor: theme.colors.button_bg_default,
+    borderRadius: theme.radii.md,
+  },
+  retryButtonText: {
+    color: theme.colors.text_default,
+    fontSize: theme.fontSizes.lg,
+    lineHeight: theme.fontSizes.lg + 4,
+    fontWeight: '500',
+  },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingTop: 100,
     gap: 12,
+  },
+  loadMoreContainer: {
+    paddingVertical: 20,
+    alignItems: 'center',
   },
   emptyText: {
     fontSize: theme.fontSizes.md,

@@ -1,5 +1,11 @@
 import { rentalsApi } from '../api';
-import type { RentalRecord, CreateRentalData, UpdateRentalStatusData } from '../types';
+import type {
+  RentalRecord,
+  CreateRentalData,
+  UpdateRentalStatusData,
+  ProductListParams,
+  RentalListResponse,
+} from '../types';
 
 /**
  * 租借服务 - 处理租借相关的业务逻辑
@@ -15,15 +21,15 @@ class RentalService {
   /**
    * 获取用户作为租借者的记录
    */
-  async getRenterRentals(): Promise<RentalRecord[]> {
-    return rentalsApi.getRenterRentals();
+  async getRenterRentals(params?: ProductListParams): Promise<RentalListResponse> {
+    return rentalsApi.getRenterRentals(params);
   }
 
   /**
    * 获取用户作为出租者的记录
    */
-  async getOwnerRentals(): Promise<RentalRecord[]> {
-    return rentalsApi.getOwnerRentals();
+  async getOwnerRentals(params?: ProductListParams): Promise<RentalListResponse> {
+    return rentalsApi.getOwnerRentals(params);
   }
 
   /**

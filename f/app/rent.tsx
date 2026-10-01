@@ -4,7 +4,6 @@ import {
   View,
   Image,
   TouchableOpacity,
-  Alert,
   ScrollView,
   ActivityIndicator,
   Platform,
@@ -17,7 +16,7 @@ import { theme } from '../theme';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { useQuery } from '../src/hooks/useQuery';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { addressService, productService, rentalService, messageService } from '../src/services';
 import { useAuth } from '../src/hooks/useAuth';
 import { getDefaultGreeting } from '../src/utils/defaultGreeting';
@@ -25,6 +24,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import SimpleLineIcons from '@expo/vector-icons/SimpleLineIcons';
 import EvilIcons from '@expo/vector-icons/EvilIcons';
 import Modal from '../src/components/Modal';
+import ConfirmModal from '../src/components/ConfirmModal';
+import type { ConfirmMode, ConfirmType } from '../src/components/ConfirmModal';
 import type { Address } from '../src/types';
 
 export default function RentPage() {
@@ -33,26 +34,109 @@ export default function RentPage() {
 
   const {
     data: product,
-    loading,
+    isPending: loading,
     error,
     refetch,
-  } = useQuery(() => productService.getProduct(id, user?.id), { enabled: !!id });
-  const { data: address, refetch: refetchDefaultAddress } = useQuery(
-    () => addressService.getDefaultAddress(),
-    { enabled: !!id },
-  );
-  const { data: addressList, refetch: refetchAddresses } = useQuery(
-    () => addressService.getAddresses().then((res) => res.data),
-    {
-      enabled: !!id,
-    },
-  );
+  } = useQuery({
+    queryKey: ['product', id, user?.id],
+    queryFn: () => productService.getProduct(id, user?.id),
+    enabled: !!id,
+  });
+  const { data: address, refetch: refetchDefaultAddress } = useQuery({
+    queryKey: ['defaultAddress'],
+    queryFn: () => addressService.getDefaultAddress(),
+    enabled: !!id,
+  });
+  const { data: addressList, refetch: refetchAddresses } = useQuery({
+    queryKey: ['addresses'],
+    queryFn: () => addressService.getAddresses().then((res) => res.data),
+    enabled: !!id,
+  });
+
+  const queryClient = useQueryClient();
 
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentPicker, setCurrentPicker] = useState<'start' | 'end' | null>(null);
   const [showAddressModal, setShowAddressModal] = useState(false);
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string;
+    message: string;
+    type: ConfirmType;
+    mode: ConfirmMode;
+    confirmText: string;
+    onConfirm: () => void;
+  }>({
+    title: '提示',
+    message: '',
+    type: 'primary',
+    mode: 'alert',
+    confirmText: '确定',
+    onConfirm: () => {},
+  });
+
+  const showAlert = (
+    title: string,
+    message: string,
+    onConfirm?: () => void,
+    type: ConfirmType = 'primary',
+  ) => {
+    setAlertConfig({
+      title,
+      message,
+      type,
+      mode: 'alert',
+      confirmText: '确定',
+      onConfirm: onConfirm || (() => {}),
+    });
+    setAlertVisible(true);
+  };
+
+  // 创建订单
+  const createRentalMutation = useMutation({
+    mutationFn: (params: { productId: string; startDate: string; endDate: string }) =>
+      rentalService.createRental(params),
+    onSuccess: async (rental) => {
+      // 自动发送默认打招呼语 + 订单消息
+      try {
+        const greeting = await getDefaultGreeting();
+        if (greeting?.trim()) {
+          await messageService.sendMessage({
+            receiverId: product!.user.id,
+            type: 'text',
+            content: greeting,
+            productId: id!,
+          });
+        }
+        await messageService.sendMessage({
+          receiverId: product!.user.id,
+          type: 'order',
+          content: '新订单，请查收',
+          rentalId: rental.id,
+        });
+      } catch (e) {
+        console.error('发送默认打招呼语失败:', e);
+      }
+      showAlert('成功', '订单创建成功！', () => router.back());
+    },
+    onError: (error: any) => {
+      const errorMsg = error.response?.data?.message || '创建订单失败，请稍后重试';
+      showAlert('失败', errorMsg, undefined, 'danger');
+    },
+  });
+
+  // 设为默认地址
+  const setDefaultMutation = useMutation({
+    mutationFn: (addrId: string) => addressService.setDefaultAddress(addrId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['addresses'] });
+      queryClient.invalidateQueries({ queryKey: ['defaultAddress'] });
+    },
+    onError: () => {
+      showAlert('错误', '设置默认地址失败', undefined, 'danger');
+    },
+  });
 
   // 页面聚焦时刷新地址列表（从地址编辑页返回后自动更新）
   useFocusEffect(
@@ -72,13 +156,9 @@ export default function RentPage() {
 
   const handleSelectAddress = async (addr: Address) => {
     if (!addr.isDefault) {
-      try {
-        await addressService.setDefaultAddress(addr.id);
-        await Promise.all([refetchAddresses(), refetchDefaultAddress()]);
-        setShowAddressModal(false);
-      } catch (err) {
-        Alert.alert('错误', '设置默认地址失败');
-      }
+      await setDefaultMutation.mutateAsync(addr.id, {
+        onSuccess: () => setShowAddressModal(false),
+      });
     } else {
       setShowAddressModal(false);
     }
@@ -117,53 +197,24 @@ export default function RentPage() {
   // 合计 = 租金 + 押金
   const totalPay = rentalFee + Number(deposit);
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!isAuthenticated) {
-      Alert.alert('提示', '请先登录');
+      showAlert('提示', '请先登录');
       return;
     }
     if (!startDate || !endDate) {
-      Alert.alert('提示', '请选择租赁日期');
+      showAlert('提示', '请选择租赁日期');
       return;
     }
     if (!address) {
-      Alert.alert('提示', '请选择收货地址');
+      showAlert('提示', '请选择收货地址');
       return;
     }
-    setIsSubmitting(true);
-    try {
-      const rental = await rentalService.createRental({
-        productId: id!,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
-      });
-      // 自动发送默认打招呼语 + 订单消息
-      try {
-        const greeting = await getDefaultGreeting();
-        if (greeting?.trim()) {
-          await messageService.sendMessage({
-            receiverId: product!.user.id,
-            type: 'text',
-            content: greeting,
-            productId: id!,
-          });
-        }
-        await messageService.sendMessage({
-          receiverId: product!.user.id,
-          type: 'order',
-          content: '新订单，请查收',
-          rentalId: rental.id,
-        });
-      } catch (e) {
-        console.error('发送默认打招呼语失败:', e);
-      }
-      Alert.alert('成功', '订单创建成功！', [{ text: '确定', onPress: () => router.back() }]);
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || '创建订单失败，请稍后重试';
-      Alert.alert('失败', errorMsg);
-    } finally {
-      setIsSubmitting(false);
-    }
+    createRentalMutation.mutate({
+      productId: id!,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    });
   };
 
   if (loading) {
@@ -202,7 +253,7 @@ export default function RentPage() {
         </View>
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>加载失败</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryButtonText}>重试</Text>
           </TouchableOpacity>
         </View>
@@ -403,9 +454,9 @@ export default function RentPage() {
         <TouchableOpacity
           style={[styles.submitButton, product.status !== 'available' && styles.disabledButton]}
           onPress={handleSubmit}
-          disabled={product.status !== 'available' || isSubmitting}
+          disabled={product.status !== 'available' || createRentalMutation.isPending}
         >
-          {isSubmitting ? (
+          {createRentalMutation.isPending ? (
             <ActivityIndicator size='small' color='white' />
           ) : (
             <Text style={styles.submitButtonText}>
@@ -422,6 +473,18 @@ export default function RentPage() {
         onSelect={handleSelectAddress}
         onClose={() => setShowAddressModal(false)}
         onAddNew={handleAddNewAddress}
+      />
+
+      {/* 通用提示弹窗 */}
+      <ConfirmModal
+        visible={alertVisible}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        mode={alertConfig.mode}
+        confirmText={alertConfig.confirmText}
+        onConfirm={alertConfig.onConfirm}
+        onCancel={() => setAlertVisible(false)}
       />
     </SafeAreaView>
   );

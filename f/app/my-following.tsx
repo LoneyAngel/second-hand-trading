@@ -13,19 +13,23 @@ import { router } from 'expo-router';
 import { theme } from '../theme';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '../src/hooks/useQuery';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { productService } from '../src/services';
-import { useAuth } from '../src/hooks/useAuth';
-import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
 
 export default function MyFollowingPage() {
-  const { isAuthenticated } = useAuth();
+  const queryCient = useQueryClient();
   const [allFollowing, setAllFollowing] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
-  const { data, loading, error, refetch } = useQuery(() =>
-    productService.getFollowing({ limit: 50 }),
-  );
+  const {
+    data,
+    isPending: loading,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['following'],
+    queryFn: () => productService.getFollowing({ limit: 50 }),
+  });
   console.log(data);
 
   useEffect(() => {
@@ -44,22 +48,25 @@ export default function MyFollowingPage() {
       setRefreshing(false);
     }
   };
+  const toggleFollowMutation = useMutation({
+    mutationFn: productService.toggleFollow,
+    onSuccess: () => {
+      queryCient.invalidateQueries({
+        queryKey: ['user', 'followingCount'],
+      });
+    },
+  });
 
   const handleFollow = async (userId: string) => {
     try {
-      await productService.toggleFollow(userId);
+      await toggleFollowMutation.mutateAsync(userId);
       refetch();
     } catch (error) {
       console.error('操作失败:', error);
     }
   };
 
-  // 跳转登录页
-  const goToSign = useDebouncedPress(() => {
-    router.push('/sign');
-  });
-
-  // 跳转用户主页（参数化防抖）
+  // 跳转用户主页
   const userProfileLockRef = useRef(false);
   const goToUserProfile = (userId: string) => {
     if (userProfileLockRef.current) return;
@@ -73,35 +80,13 @@ export default function MyFollowingPage() {
     }, 800);
   };
 
-  if (!isAuthenticated) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            onPress={() => router.back()}
-          >
-            <AntDesign name='arrow-left' size={24} color='black' />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>我的关注</Text>
-          <View style={{ width: 24 }} />
-        </View>
-        <View style={styles.loadingContainer}>
-          <Text style={styles.errorText}>请先登录</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={goToSign}>
-            <Text style={styles.retryButtonText}>去登录</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
   const renderEmptyComponent = () => {
-    if (error && allFollowing.length === 0) {
+    if (error) {
       return (
         <SafeAreaView style={styles.container}>
           <View style={styles.loadingContainer}>
             <Text style={styles.errorText}>加载失败</Text>
-            <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+            <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
               <Text style={styles.retryButtonText}>重试</Text>
             </TouchableOpacity>
           </View>
@@ -109,7 +94,7 @@ export default function MyFollowingPage() {
       );
     }
 
-    if (loading && allFollowing.length === 0) {
+    if (loading) {
       return (
         <SafeAreaView style={styles.container}>
           <View style={styles.loadingContainer}>
@@ -148,10 +133,7 @@ export default function MyFollowingPage() {
 
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.userCard}
-            onPress={() => goToUserProfile(item.id)}
-          >
+          <TouchableOpacity style={styles.userCard} onPress={() => goToUserProfile(item.id)}>
             <View style={styles.avatarWrapper}>
               {item.avatar ? (
                 <Image source={{ uri: item.avatar }} style={styles.avatar} resizeMode='cover' />

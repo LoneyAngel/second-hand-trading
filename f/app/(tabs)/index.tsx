@@ -13,7 +13,7 @@ import SearchBar from '../../src/components/SearchBar';
 import { theme } from '../../theme';
 import Person from '@assets/icon/person.svg';
 import { router } from 'expo-router';
-import { useQuery } from '../../src/hooks/useQuery';
+import { useQuery } from '@tanstack/react-query';
 import { productService } from '../../src/services';
 import type { AdviseProductGroup, Product, PriceUnit } from '../../src/types';
 import Entypo from '@expo/vector-icons/Entypo';
@@ -32,10 +32,14 @@ export default function Home_Page() {
   // 获取推荐数据
   const {
     data: groups,
-    loading,
+    isPending: loading,
     error,
     refetch,
-  } = useQuery(() => productService.getAdviseProducts());
+  } = useQuery({
+    queryKey: ['adviseProducts'],
+    queryFn: () => productService.getAdviseProducts(),
+  });
+  console.log('groups', groups);
 
   const goToUpload = useDebouncedPress(() => {
     router.push('/upload');
@@ -85,10 +89,7 @@ export default function Home_Page() {
   const renderListHeader = () => (
     <>
       {/* 上传商品引导 */}
-      <TouchableOpacity
-        style={styles.uploadGuide}
-        onPress={goToUpload}
-      >
+      <TouchableOpacity style={styles.uploadGuide} onPress={goToUpload}>
         <View style={styles.uploadIconContainer}>
           <Person height={32} width={32} fill={theme.colors.text_default} />
         </View>
@@ -127,7 +128,7 @@ export default function Home_Page() {
         </SafeAreaView>
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>加载失败</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryButtonText}>重试</Text>
           </TouchableOpacity>
         </View>
@@ -145,7 +146,7 @@ export default function Home_Page() {
 
       {/* 外层 FlatList：按分类分组 */}
       <FlatList
-        data={groups}
+        data={groups?.data || []}
         keyExtractor={(group) => group.id}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}

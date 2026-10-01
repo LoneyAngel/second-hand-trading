@@ -6,13 +6,14 @@ import {
   Image,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import Feather from '@expo/vector-icons/Feather';
 import { theme } from '../theme';
-import { useQuery } from '../src/hooks/useQuery';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDebouncedPress } from '../src/hooks/useDebouncedPress';
 import { rentalService, messageService } from '../src/services';
 import { useAuth } from '../src/hooks/useAuth';
@@ -49,8 +50,6 @@ const STATUS_DESC: Record<RentalStatus, string> = {
 export default function RentalDetailPage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
-  const [updating, setUpdating] = useState(false);
-  // 自定义确认弹窗状态
   // 确认弹窗
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState<{
@@ -65,12 +64,65 @@ export default function RentalDetailPage() {
     onConfirm: () => {},
   });
 
+  const queryClient = useQueryClient();
+
   const {
     data: rental,
-    loading,
+    isPending: loading,
     error,
     refetch,
-  } = useQuery(() => rentalService.getRental(id!), { enabled: !!id });
+  } = useQuery({
+    queryKey: ['rental', id],
+    queryFn: () => rentalService.getRental(id!),
+    enabled: !!id,
+  });
+
+  // 更新订单状态
+  const updateStatusMutation = useMutation({
+    mutationFn: (status: RentalStatus) => rentalService.updateRentalStatus(id!, { status }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rental', id] });
+    },
+  });
+
+  // 完成订单（发起/确认/撤销）
+  const completeMutation = useMutation({
+    mutationFn: () => rentalService.completeRental(id!),
+    onSuccess: (updated) => {
+      queryClient.invalidateQueries({ queryKey: ['rental', id] });
+
+      // 如果是首次发起完成确认，发送订单卡片消息给对方
+      const wasRequested = !!rental?.completeRequestedBy;
+      if (!wasRequested && updated.completeRequestedBy && rental && user) {
+        const _isOwner = user.id === rental.ownerId;
+        const otherUser = _isOwner ? rental.renter : rental.owner;
+        const sendMsg = async () => {
+          try {
+            const socket = await getSocket().catch(() => null);
+            if (socket?.connected) {
+              sendSocketMessage({
+                receiverId: otherUser.id,
+                content: '我已发起订单完成确认，请确认',
+                type: 'order',
+                rentalId: rental.id,
+              });
+            } else {
+              await messageService.sendMessage({
+                receiverId: otherUser.id,
+                type: 'order',
+                content: '我已发起订单完成确认，请确认',
+                rentalId: rental.id,
+              });
+            }
+          } catch (e) {
+            console.error('发送订单卡片失败:', e);
+          }
+        };
+        sendMsg();
+      }
+    },
+  });
+
   const goToProductDetail = useDebouncedPress(() => {
     router.push({
       pathname: '/detail',
@@ -113,7 +165,7 @@ export default function RentalDetailPage() {
         </View>
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>加载失败</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryText}>重试</Text>
           </TouchableOpacity>
         </View>
@@ -152,18 +204,7 @@ export default function RentalDetailPage() {
   };
 
   const handleUpdateStatus = (status: RentalStatus, confirmText?: string) => {
-    const doUpdate = async () => {
-      setUpdating(true);
-      try {
-        await rentalService.updateRentalStatus(id!, { status });
-        refetch();
-      } catch (err: any) {
-        // 错误由 showConfirm 不捕获，这里兜底
-        console.error('操作失败:', err);
-      } finally {
-        setUpdating(false);
-      }
-    };
+    const doUpdate = async () => await updateStatusMutation.mutateAsync(status);
 
     if (confirmText) {
       showConfirm('确认操作', confirmText, doUpdate, status === 'cancelled' ? 'danger' : 'primary');
@@ -176,52 +217,9 @@ export default function RentalDetailPage() {
   const handleComplete = () => {
     if (!rental) return;
 
-    const doComplete = async () => {
-      setUpdating(true);
-      try {
-        const wasRequested = !!rental.completeRequestedBy;
-        const wasRequestedByOther =
-          rental.completeRequestedBy && rental.completeRequestedBy !== user?.id;
-
-        const updated = await rentalService.completeRental(id!);
-
-        // 如果是首次发起（之前没有请求），发送订单卡片消息给对方
-        if (!wasRequested && updated.completeRequestedBy) {
-          const otherUser = isOwner ? rental.renter : rental.owner;
-          try {
-            const socket = await getSocket().catch(() => null);
-            if (socket?.connected) {
-              sendSocketMessage({
-                receiverId: otherUser.id,
-                content: '我已发起订单完成确认，请确认',
-                type: 'order',
-                rentalId: rental.id,
-              });
-            } else {
-              // HTTP 兜底
-              await messageService.sendMessage({
-                receiverId: otherUser.id,
-                type: 'order',
-                content: '我已发起订单完成确认，请确认',
-                rentalId: rental.id,
-              });
-            }
-          } catch (e) {
-            console.error('发送订单卡片失败:', e);
-          }
-        }
-
-        refetch();
-      } catch (err: any) {
-        console.error('操作失败:', err);
-      } finally {
-        setUpdating(false);
-      }
-    };
-
     let title = '发起完成确认';
     let msg = '确定发起订单完成确认吗？对方确认后订单将完成。';
-    let type: 'primary' | 'danger' | 'default' = 'primary';
+    let type: ConfirmType = 'primary';
 
     if (rental.completeRequestedBy === user?.id) {
       title = '撤销完成确认';
@@ -233,7 +231,7 @@ export default function RentalDetailPage() {
       type = 'primary';
     }
 
-    showConfirm(title, msg, doComplete, type);
+    showConfirm(title, msg, () => completeMutation.mutate(), type);
   };
 
   const handleAction = (action: string) => {
@@ -277,6 +275,8 @@ export default function RentalDetailPage() {
     if (!rental || !user) return null;
     const status = rental.status;
 
+    const isUpdating = updateStatusMutation.isPending || completeMutation.isPending;
+
     const buttons: { label: string; action: string; primary?: boolean; danger?: boolean }[] = [];
 
     if (status === 'pending') {
@@ -311,10 +311,10 @@ export default function RentalDetailPage() {
               styles.actionButton,
               btn.primary && styles.primaryButton,
               btn.danger && styles.dangerButton,
-              updating && { opacity: 0.6 },
+              isUpdating && { opacity: 0.6 },
             ]}
-            onPress={() => !updating && handleAction(btn.action)}
-            disabled={updating}
+            onPress={() => !isUpdating && handleAction(btn.action)}
+            disabled={isUpdating}
           >
             <Text
               style={[

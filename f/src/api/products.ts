@@ -97,7 +97,7 @@ export const productsApi = {
   /**
    * 获取我的收藏数量
    */
-  async getFavoritesCount(): Promise<{ count: number }> {
+  async getFavoritesCount(): Promise<{ data: number }> {
     return request.get('/products/favorites/count');
   },
 
@@ -111,7 +111,7 @@ export const productsApi = {
   /**
    * 获取我的浏览记录数量
    */
-  async getFootprintsCount(): Promise<{ count: number }> {
+  async getFootprintsCount(): Promise<{ data: number }> {
     return request.get('/products/footprints/count');
   },
 
@@ -161,7 +161,7 @@ export const productsApi = {
   /**
    * 获取关注数量
    */
-  async getFollowingCount(): Promise<{ count: number }> {
+  async getFollowingCount(): Promise<{ data: number }> {
     return request.get('/users/following/count');
   },
 

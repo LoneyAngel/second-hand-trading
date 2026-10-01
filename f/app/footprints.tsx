@@ -2,68 +2,41 @@ import {
   StyleSheet,
   View,
   Text,
-  ActivityIndicator,
   TouchableOpacity,
   FlatList,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 import AntDesign from '@expo/vector-icons/AntDesign';
 import { router } from 'expo-router';
-import { useState, useEffect, useCallback } from 'react';
-import { useQuery } from '../src/hooks/useQuery';
+import { useQuery } from '@tanstack/react-query';
 import { productService } from '../src/services';
-import type { Product } from '../src/types';
 import SimpleProductCard from '../src/components/SmallCard';
 
 export default function FootPrintPage() {
-  const [refreshing, setRefreshing] = useState(false);
-  const [allProducts, setAllProducts] = useState<Product[]>([]);
-
-  const { data, loading, error, refetch } = useQuery(
-    () => productService.getMyFootPrintsPaginated(),
-    {},
-  );
-
-  useEffect(() => {
-    if (Array.isArray(data?.data)) {
-      setAllProducts(data?.data);
-    }
-  }, [data?.data]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      refetch();
-    } catch (error) {
-      console.error('刷新失败:', error);
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+  const {
+    data: allProducts,
+    isPending,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['footprints'],
+    queryFn: () => productService.getMyFootPrintsPaginated(),
+  });
 
   const renderEmptyComponent = () => {
-    if (error && allProducts.length === 0) {
+    if (error) {
       return (
         <View style={styles.loadingContainer}>
           <Text style={styles.errorText}>加载失败</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={refetch}>
+          <TouchableOpacity style={styles.retryButton} onPress={() => refetch()}>
             <Text style={styles.retryButtonText}>重试</Text>
           </TouchableOpacity>
         </View>
       );
     }
-
-    if (loading && allProducts.length === 0) {
-      return (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size='large' color={theme.colors.text_default} />
-          <Text style={styles.loadingText}>加载中...</Text>
-        </View>
-      );
-    }
-
     return (
       <View style={styles.emptyContainer}>
         <AntDesign name='clock-circle' size={48} color={theme.colors.text_secondary} />
@@ -86,29 +59,37 @@ export default function FootPrintPage() {
       </View>
 
       <FlatList
-        data={allProducts}
+        data={allProducts?.data}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={[styles.listContent, allProducts.length === 0 && { flex: 1 }]}
+        contentContainerStyle={[styles.listContent, allProducts?.data.length === 0 && { flex: 1 }]}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <View style={styles.cardWrapper}>
             <SimpleProductCard product={item} />
           </View>
         )}
-        ListEmptyComponent={renderEmptyComponent}
-        ListFooterComponent={
-          loading && allProducts.length > 0 ? (
-            <View style={styles.loadMoreContainer}>
-              <ActivityIndicator size='small' color={theme.colors.text_default} />
+        ListEmptyComponent={
+          isPending ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size='large' color={theme.colors.text_default} />
             </View>
           ) : (
-            <View style={{ height: 20 }} />
+            renderEmptyComponent()
           )
         }
+        // ListFooterComponent={
+        //   loading && allProducts.length > 0 ? (
+        //     <View style={styles.loadMoreContainer}>
+        //       <ActivityIndicator size='small' color={theme.colors.text_default} />
+        //     </View>
+        //   ) : (
+        //     <View style={{ height: 20 }} />
+        //   )
+        // }
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
+            refreshing={isPending}
+            onRefresh={refetch}
             colors={[theme.colors.selected]}
             tintColor={theme.colors.selected}
             title='加载中...'

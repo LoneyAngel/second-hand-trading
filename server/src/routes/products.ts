@@ -65,6 +65,7 @@ productsRouter.get(
 
     res.json({
       data: products,
+      page: Number(page),
       hasMore: total > Number(page) * Number(limit),
     });
   }),
@@ -151,6 +152,7 @@ productsRouter.get(
   authMiddleware,
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const { status, page = '1', limit = '10' } = req.query;
+    console.log('mine params:', { status, page, limit });
     const userId = req.user!.userId;
 
     const where: any = {};
@@ -176,6 +178,7 @@ productsRouter.get(
     res.json({
       data: products,
       hasMore: total > Number(page) * Number(limit),
+      page: page,
     });
   }),
 );
@@ -236,7 +239,7 @@ productsRouter.get(
       if (array.length >= 3) break;
     }
 
-    res.json(array);
+    res.json({ data: array });
   }),
 );
 
@@ -409,7 +412,7 @@ productsRouter.get(
 
     const count = footprint ? (footprint.tracks as unknown as any[]).length : 0;
 
-    res.json({ count });
+    res.json({ data: count });
   }),
 );
 
